@@ -4,14 +4,17 @@ from datetime import datetime
 import yaml
 from .schemas import RawEvent, Label
 
+
 @dataclass
 class SplitData:
     train: tuple[list[RawEvent], list[Label]]
     val: tuple[list[RawEvent], list[Label]]
     test: tuple[list[RawEvent], list[Label]]
 
+
 def _parse_dt(s: str) -> datetime:
     return datetime.fromisoformat(s)
+
 
 def time_split(events: list[RawEvent], labels: list[Label], data_cfg_path: str) -> SplitData:
     with open(data_cfg_path, "r") as f:

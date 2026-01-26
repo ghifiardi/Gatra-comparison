@@ -7,6 +7,7 @@ import torch
 from architecture_a_rl.networks import Actor
 from architecture_b_iforest.model import IForestModel
 
+
 @dataclass
 class IForestAdapter:
     preprocessor: Any
@@ -21,6 +22,7 @@ class IForestAdapter:
         x = np.array(features_v7, dtype=np.float32)[None, :]
         x = self.preprocessor.transform(x)
         return float(self.model.score(x)[0])
+
 
 @dataclass
 class PPOAdapter:

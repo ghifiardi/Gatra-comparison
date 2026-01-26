@@ -2,13 +2,16 @@ import numpy as np
 from serving.contract import InferenceRequest
 from serving.router import handle_request
 
+
 class DummyIForest:
     def score(self, features_v7):
         return 0.42
 
+
 class DummyPPO:
     def action_probs(self, features_v128):
         return [0.1, 0.2, 0.3, 0.4]
+
 
 def test_invalid_v7_dim_rejected() -> None:
     req = InferenceRequest(
@@ -23,6 +26,7 @@ def test_invalid_v7_dim_rejected() -> None:
     assert payload["error_code"] == "FEATURE_DIM_MISMATCH"
     assert payload["feature_version"] == "v7"
 
+
 def test_invalid_v128_dim_rejected() -> None:
     req = InferenceRequest(
         event_id="evt_bad_v128",
@@ -35,6 +39,7 @@ def test_invalid_v128_dim_rejected() -> None:
     assert status == 400
     assert payload["error_code"] == "FEATURE_DIM_MISMATCH"
     assert payload["feature_version"] == "v128"
+
 
 def test_nan_inf_rejected() -> None:
     req = InferenceRequest(
@@ -49,6 +54,7 @@ def test_nan_inf_rejected() -> None:
     assert payload["error_code"] == "FEATURE_NAN_INF"
     assert payload["feature_version"] == "v7"
 
+
 def test_non_numeric_rejected() -> None:
     req = InferenceRequest(
         event_id="evt_dtype",
@@ -61,6 +67,7 @@ def test_non_numeric_rejected() -> None:
     assert status == 400
     assert payload["error_code"] == "FEATURE_DTYPE"
     assert payload["feature_version"] == "v7"
+
 
 def test_valid_request_success() -> None:
     req = InferenceRequest(

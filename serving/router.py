@@ -16,6 +16,7 @@ INVALID_FEATURE_COUNTERS = {
     "unknown": 0,
 }
 
+
 def _record_invalid_feature(reason: str, feature_version: str, message: str) -> None:
     if reason not in INVALID_FEATURE_COUNTERS:
         reason = "unknown"
@@ -28,6 +29,7 @@ def _record_invalid_feature(reason: str, feature_version: str, message: str) -> 
         message,
     )
 
+
 def _infer_actual_dim(vec: Any) -> Optional[int]:
     try:
         arr = np.asarray(vec)
@@ -36,6 +38,7 @@ def _infer_actual_dim(vec: Any) -> Optional[int]:
     if arr.ndim != 1:
         return None
     return int(arr.shape[0])
+
 
 def _error_response(
     *,
@@ -55,6 +58,7 @@ def _error_response(
         message=message,
         request_id=request_id,
     ).model_dump()
+
 
 def _validate_features(
     features: Any,
@@ -91,6 +95,7 @@ def _validate_features(
             request_id=request_id,
         )
 
+
 def handle_request(
     req: InferenceRequest,
     mode: str,
@@ -119,6 +124,7 @@ def handle_request(
     response = _predict(req, mode, active, v7, v128, iforest, ppo)
     return 200, response.model_dump()
 
+
 def _predict(
     req: InferenceRequest,
     mode: str,
@@ -145,6 +151,7 @@ def _predict(
         routing_decision=routing_decision,
         meta={"mode": mode, "active": active},
     )
+
 
 def route_request(
     req: InferenceRequest,

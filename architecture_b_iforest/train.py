@@ -96,9 +96,7 @@ def _evaluate_iforest(
         return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "n_samples": 0.0}
 
     y_pred = (y_scores >= ifm.threshold).astype(int)
-    p, r, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="binary", zero_division=0
-    )
+    p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="binary", zero_division=0)
 
     return {
         "precision": float(p),

@@ -33,6 +33,7 @@ For a full RL formulation, you would need:
 This bandit formulation is a deliberate simplification that's appropriate
 when the primary goal is per-event classification/triage.
 """
+
 from __future__ import annotations
 import os
 import json
@@ -229,7 +230,9 @@ def train_ppo(ppo_cfg_path: str, data_cfg_path: str) -> str:
     val_events, val_labels = splits.val
 
     hidden = list(cfg["networks"]["hidden_sizes"])
-    actor = Actor(state_dim=cfg["rl"]["state_dim"], hidden=hidden, action_dim=cfg["rl"]["action_dim"])
+    actor = Actor(
+        state_dim=cfg["rl"]["state_dim"], hidden=hidden, action_dim=cfg["rl"]["action_dim"]
+    )
     critic = Critic(state_dim=cfg["rl"]["state_dim"], hidden=hidden)
     optim = Adam(list(actor.parameters()) + list(critic.parameters()), lr=float(cfg["train"]["lr"]))
 
@@ -332,13 +335,16 @@ def train_ppo(ppo_cfg_path: str, data_cfg_path: str) -> str:
         tuning_metrics = {}
 
     ckpt = os.path.join(out_dir, "ppo_policy.pt")
-    torch.save({
-        "actor": actor.state_dict(),
-        "critic": critic.state_dict(),
-        "cfg": cfg,
-        "threshold": best_threshold,
-        "threshold_tuned": tune_threshold,
-    }, ckpt)
+    torch.save(
+        {
+            "actor": actor.state_dict(),
+            "critic": critic.state_dict(),
+            "cfg": cfg,
+            "threshold": best_threshold,
+            "threshold_tuned": tune_threshold,
+        },
+        ckpt,
+    )
 
     # Add threshold info to final log
     final_log: dict[str, float | bool | dict[str, float]] = {

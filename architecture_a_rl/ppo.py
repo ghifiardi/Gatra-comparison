@@ -43,7 +43,9 @@ def ppo_update(
 
     optim.zero_grad(set_to_none=True)
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(list(actor.parameters()) + list(critic.parameters()), cfg.max_grad_norm)
+    torch.nn.utils.clip_grad_norm_(
+        list(actor.parameters()) + list(critic.parameters()), cfg.max_grad_norm
+    )
     optim.step()
 
     return {

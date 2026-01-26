@@ -5,6 +5,7 @@ from typing import Sequence
 import numpy as np
 from .schemas import RawEvent
 
+
 def validate_feature_vector(vec: np.ndarray | Sequence[float], expected_dim: int) -> np.ndarray:
     arr = np.asarray(vec)
     if arr.dtype.kind in ("O", "U", "S"):
@@ -21,11 +22,14 @@ def validate_feature_vector(vec: np.ndarray | Sequence[float], expected_dim: int
         raise ValueError("Feature vector contains NaN or Inf values")
     return arr
 
+
 def _safe_float(x: float | None) -> float:
     return float(x) if x is not None else 0.0
 
+
 def _safe_int(x: int | None) -> int:
     return int(x) if x is not None else 0
+
 
 def extract_features_v7(e: RawEvent) -> np.ndarray:
     # duration, bytes_sent, bytes_received, port, protocol_encoded, hour, dow
@@ -34,21 +38,26 @@ def extract_features_v7(e: RawEvent) -> np.ndarray:
 
     hour = float(e.ts.hour)
     dow = float(e.ts.weekday())
-    vec = np.array([
-        _safe_float(e.duration),
-        _safe_float(e.bytes_sent),
-        _safe_float(e.bytes_received),
-        float(_safe_int(e.port)),
-        protocol_encoded,
-        hour,
-        dow,
-    ], dtype=np.float32)
+    vec = np.array(
+        [
+            _safe_float(e.duration),
+            _safe_float(e.bytes_sent),
+            _safe_float(e.bytes_received),
+            float(_safe_int(e.port)),
+            protocol_encoded,
+            hour,
+            dow,
+        ],
+        dtype=np.float32,
+    )
     return validate_feature_vector(vec, expected_dim=7)
+
 
 @dataclass
 class HistoryContext:
     # placeholder - extend later for sliding windows, entropy, recency, etc.
     now: datetime
+
 
 def extract_features_v128(e: RawEvent, ctx: HistoryContext) -> np.ndarray:
     # Minimal deterministic 128D: fill with derived stats + padding.
