@@ -1,9 +1,0 @@
-{
-  "train_samples": 3319,
-  "val_samples": 823,
-  "val_precision": 0.625,
-  "val_recall": 0.15873015873015872,
-  "val_f1": 0.25316455696202533,
-  "final_threshold": 0.8,
-  "threshold_tuned": false
-}

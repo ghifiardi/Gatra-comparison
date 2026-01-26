@@ -1,14 +1,12 @@
-.PHONY: format lint test train_a train_b eval serve
+.PHONY: format lint test train_a train_b eval serve dev
 
 format:
-	poetry run ruff format .
+	@python3.11 -m ruff format .
 
 lint:
-	poetry run ruff check .
-	poetry run mypy .
+	@python3.11 -m ruff check .
 
-test:
-	poetry run pytest -q
+test: pytest
 
 train_b:
 	poetry run train_b --config configs/iforest.yaml --data-config configs/data.yaml
@@ -22,3 +20,10 @@ eval:
 
 serve:
 	poetry run serve --config configs/serving.yaml --data-config configs/data.yaml
+
+dev:
+	@python3.11 -m pip install -U pip
+	@python3.11 -m pip install -U ruff
+
+pytest:
+	@PYTHONPATH="$(CURDIR)" python3.11 -m pytest -q
