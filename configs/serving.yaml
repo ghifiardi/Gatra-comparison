@@ -1,0 +1,9 @@
+serving:
+  mode: "shadow"     # "shadow" | "active"
+  active: "iforest"  # "iforest" | "rl"
+  host: "127.0.0.1"
+  port: 8088
+
+artifacts:
+  iforest_dir: "./artifacts/iforest"
+  ppo_dir: "./artifacts/ppo"

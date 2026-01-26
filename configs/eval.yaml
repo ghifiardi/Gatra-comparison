@@ -1,0 +1,5 @@
+evaluation:
+  output_dir: "./reports"
+
+head_to_head:
+  rl_threshold: 0.5  # threshold for RL threat score proxy

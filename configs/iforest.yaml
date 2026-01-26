@@ -1,0 +1,14 @@
+model:
+  name: "isolation_forest"
+  random_state: 42
+  n_estimators: 200
+  max_samples: "auto"
+  contamination: "auto"
+  max_features: 1.0
+  bootstrap: false
+
+scoring:
+  threshold: 0.8  # anomaly score in [0,1]
+
+io:
+  output_dir: "./artifacts/iforest"

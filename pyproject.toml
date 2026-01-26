@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "gatra-comparison"
+version = "0.1.0"
+description = "Head-to-head comparison: Actor-Critic RL (PPO) vs Isolation Forest for SOC threat detection"
+authors = ["Ghifi <you@example.com>"]
+readme = "README.md"
+packages = [
+  { include = "data" },
+  { include = "architecture_a_rl" },
+  { include = "architecture_b_iforest" },
+  { include = "evaluation" },
+  { include = "serving" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^1.26.0"
+pandas = "^2.2.0"
+pyyaml = "^6.0.1"
+pydantic = "^2.6.0"
+scikit-learn = "^1.4.0"
+torch = "^2.2.0"
+typer = "^0.12.0"
+rich = "^13.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+ruff = "^0.4.0"
+mypy = "^1.8.0"
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.poetry.scripts]
+train_b = "architecture_b_iforest.cli:app"
+train_a = "architecture_a_rl.cli:app"
+eval_h2h = "evaluation.cli:app"
+serve = "serving.run:app"

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(make test:*)",
+      "Bash(brew list:*)",
+      "Bash(python3:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(PYTHONPATH=. pytest:*)",
+      "Bash(ruff check:*)",
+      "Bash(echo:*)",
+      "Bash(PYTHONPATH=. mypy:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(mypy:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

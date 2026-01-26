@@ -1,0 +1,36 @@
+rl:
+  algo: "ppo"
+  seed: 42
+  state_dim: 128
+  action_dim: 4
+  actions: ["escalate", "contain", "monitor", "dismiss"]
+
+reward:
+  tp_base: 10.0
+  fp_base: -3.0
+  fn_base: -15.0
+  efficiency_bonus: 1.0
+  action_cost:
+    escalate: 3.0
+    contain: 2.0
+    monitor: 1.0
+    dismiss: 0.5
+
+networks:
+  hidden_sizes: [256, 128, 64]
+
+train:
+  epochs: 10
+  batch_size: 64
+  lr: 0.0003
+  clip_ratio: 0.2
+  entropy_coef: 0.01
+  value_coef: 0.5
+  max_grad_norm: 0.5
+
+validation:
+  eval_every_epoch: 1
+  early_stop_patience: 3  # stop if no improvement for N epochs
+
+io:
+  output_dir: "./artifacts/ppo"
