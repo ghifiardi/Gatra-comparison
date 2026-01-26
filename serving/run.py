@@ -5,10 +5,12 @@ from .router import handle_request
 
 app = typer.Typer()
 
+
 @app.command()
 def main(config: str = "configs/serving.yaml", data_config: str = "configs/data.yaml") -> None:
     typer.echo("Serving stub. Wire FastAPI later if needed.")
     typer.echo(f"Config: {config}")
+
 
 @app.command()
 def demo() -> None:
@@ -51,6 +53,7 @@ def demo() -> None:
         ppo=DummyPPO(),
     )
     typer.echo(f"BAD status={status_bad} payload={payload_bad}")
+
 
 if __name__ == "__main__":
     app()

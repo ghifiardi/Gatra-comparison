@@ -4,6 +4,7 @@ from data.schemas import LabelType
 
 ACTIONS = ["escalate", "contain", "monitor", "dismiss"]
 
+
 @dataclass
 class RewardConfig:
     tp_base: float
@@ -11,6 +12,7 @@ class RewardConfig:
     fn_base: float
     efficiency_bonus: float
     action_cost: dict[str, float]
+
 
 def compute_reward(
     label: LabelType,

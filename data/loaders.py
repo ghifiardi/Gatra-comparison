@@ -7,10 +7,12 @@ from .toy import ToyDataset
 
 SourceType = Literal["toy", "csv", "parquet", "bigquery"]
 
+
 @dataclass
 class LoadedData:
     events: list[RawEvent]
     labels: list[Label]
+
 
 def load_data(data_config_path: str) -> LoadedData:
     with open(data_config_path, "r") as f:

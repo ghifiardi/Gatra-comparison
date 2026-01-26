@@ -19,6 +19,7 @@ class IForestModel:
         calibration_min: Minimum raw score from training set (for normalization).
         calibration_max: Maximum raw score from training set (for normalization).
     """
+
     model: IsolationForest
     threshold: float = 0.8
     calibration_min: float | None = field(default=None)

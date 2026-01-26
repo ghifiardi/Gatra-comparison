@@ -2,12 +2,14 @@ from __future__ import annotations
 from typing import Optional, List, Dict
 from pydantic import BaseModel
 
+
 class InferenceRequest(BaseModel):
     event_id: str
     ts: str
     features_v7: List[float | int | str]
     features_v128: List[float | int | str]
     request_id: Optional[str] = None
+
 
 class InferenceResponse(BaseModel):
     event_id: str
@@ -16,6 +18,7 @@ class InferenceResponse(BaseModel):
     rl_action: Optional[str] = None
     routing_decision: str
     meta: Dict[str, str] = {}
+
 
 class InferenceErrorResponse(BaseModel):
     error: str

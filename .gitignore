@@ -2,3 +2,19 @@
 # office temp files
 docs/~.docx
 ~.docx
+
+# macOS + editor
+.DS_Store
+.claude/
+
+# python
+__pycache__/
+*.pyc
+
+# generated artifacts/reports
+artifacts/
+reports/
+
+# Office temp/lock files
+docs/~$*.docx
+~$*.docx

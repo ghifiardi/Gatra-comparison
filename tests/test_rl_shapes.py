@@ -1,6 +1,7 @@
 import torch
 from architecture_a_rl.networks import Actor, Critic
 
+
 def test_actor_critic_shapes() -> None:
     actor = Actor(state_dim=128, hidden=[64], action_dim=4)
     critic = Critic(state_dim=128, hidden=[64])

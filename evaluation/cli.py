@@ -4,6 +4,7 @@ from .head_to_head import run_head_to_head
 
 app = typer.Typer()
 
+
 @app.command()
 def main(
     eval_config: str = "configs/eval.yaml",
@@ -13,6 +14,7 @@ def main(
 ) -> None:
     path = run_head_to_head(eval_config, data_config, iforest_config, ppo_config)
     typer.echo(f"Saved report -> {path}")
+
 
 if __name__ == "__main__":
     app()

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
+
 @dataclass
 class Preprocessor:
     scaler: StandardScaler | None = None

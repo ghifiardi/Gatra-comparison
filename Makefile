@@ -4,6 +4,7 @@ format:
 	@python3.11 -m ruff format .
 
 lint:
+	@python3.11 -m ruff format --check .
 	@python3.11 -m ruff check .
 
 test: pytest

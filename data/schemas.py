@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 LabelType = Literal["threat", "benign", "unknown"]
 
+
 class RawEvent(BaseModel):
     event_id: str
     ts: datetime
@@ -17,6 +18,7 @@ class RawEvent(BaseModel):
     bytes_received: Optional[float] = None
     user_id: Optional[str] = None
     host_id: Optional[str] = None
+
 
 class Label(BaseModel):
     event_id: str
