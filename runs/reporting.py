@@ -160,7 +160,7 @@ def render_summary_md(
         "",
         "## Reproduce",
         f"- Contract dir: {contract_dir}",
-        "- Command: python -m runs.cli main --data-config configs/data.yaml "
+        "- Command: python -m runs.cli --data-config configs/data.yaml "
         "--iforest-config configs/iforest.yaml --ppo-config configs/ppo.yaml "
         "--eval-config configs/eval.yaml --out-root reports/runs",
         "",
