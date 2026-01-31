@@ -1,5 +1,7 @@
 # gatra-comparison
 
+![CI](../../actions/workflows/ci.yml/badge.svg)
+
 Head-to-head evaluation of:
 - Architecture B: Isolation Forest baseline
 - Architecture A: Actor-Critic RL (PPO) policy
