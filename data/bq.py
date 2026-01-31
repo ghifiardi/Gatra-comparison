@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional
 
+bigquery: Any = None
+
 try:
-    from google.cloud import bigquery
+    from google.cloud import bigquery as _bigquery
+    bigquery = _bigquery
 except Exception:  # pragma: no cover - optional dependency
     bigquery = None
 
