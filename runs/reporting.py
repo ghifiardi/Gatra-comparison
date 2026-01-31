@@ -41,12 +41,14 @@ def build_run_manifest(
     created_at: str,
     git_commit: str,
     config_hashes: dict[str, str],
+    config_snapshot: dict[str, str],
     data_cfg: dict[str, Any],
     schema_hash: str,
     poetry_lock_hash: str | None,
     contract_id: str,
     contract_meta: dict[str, Any],
     mode: str,
+    seeds: dict[str, int],
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
     labels = data_cfg.get("labels", {})
@@ -58,7 +60,9 @@ def build_run_manifest(
         "schema_hash": schema_hash,
         "mode": mode,
         "config_hashes": config_hashes,
+        "config_snapshot": config_snapshot,
         "poetry_lock_sha256": poetry_lock_hash,
+        "seeds": seeds,
         "data_source": {
             "source": source,
             "bq_project": dataset.get("bq_project"),

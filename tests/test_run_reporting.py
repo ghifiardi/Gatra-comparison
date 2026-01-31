@@ -9,6 +9,12 @@ def test_build_run_manifest_minimal():
         created_at="2026-01-31T14:15:00Z",
         git_commit="deadbeef",
         config_hashes={"data": "abc", "iforest": "def"},
+        config_snapshot={
+            "data": "reports/runs/20260131T141500Z/config/data.yaml",
+            "iforest": "reports/runs/20260131T141500Z/config/iforest.yaml",
+            "ppo": "reports/runs/20260131T141500Z/config/ppo.yaml",
+            "eval": "reports/runs/20260131T141500Z/config/eval.yaml",
+        },
         data_cfg={
             "dataset": {
                 "source": "bigquery",
@@ -27,6 +33,7 @@ def test_build_run_manifest_minimal():
         contract_id="20260131T141500Z",
         contract_meta={"counts": {"train": 1}, "label_pos_rate": {"train": 0.1}},
         mode="quick",
+        seeds={"python": 42, "numpy": 42, "torch": 42, "iforest": 42},
     )
     assert manifest["run_id"] == "20260131T141500Z"
     assert manifest["schema_hash"] == "schema123"
@@ -34,6 +41,8 @@ def test_build_run_manifest_minimal():
     assert manifest["data_source"]["bq_events_table"] == "events"
     assert manifest["poetry_lock_sha256"] == "lock123"
     assert manifest["mode"] == "quick"
+    assert manifest["config_snapshot"]["data"].endswith("data.yaml")
+    assert manifest["seeds"]["torch"] == 42
 
 
 def test_render_summary_md_contains_metrics():

@@ -279,23 +279,39 @@ def main(
         "ppo": file_sha256(config_paths["ppo"]),
         "eval": file_sha256(config_paths["eval"]),
     }
+    config_snapshot = {
+        "data": os.path.relpath(config_paths["data"], run_root),
+        "iforest": os.path.relpath(config_paths["iforest"], run_root),
+        "ppo": os.path.relpath(config_paths["ppo"], run_root),
+        "eval": os.path.relpath(config_paths["eval"], run_root),
+    }
 
     poetry_lock_hash = None
     lock_path = os.path.join(os.getcwd(), "poetry.lock")
     if os.path.exists(lock_path):
         poetry_lock_hash = file_sha256(lock_path)
 
+    iforest_cfg = load_yaml(config_paths["iforest"])
+    seed_value = int(ppo_cfg.get("rl", {}).get("seed", 42))
+    iforest_seed = int(iforest_cfg.get("model", {}).get("random_state", seed_value))
     manifest = build_run_manifest(
         run_id=run_id,
         created_at=datetime.utcnow().isoformat() + "Z",
         git_commit=_git_commit_hash(),
         config_hashes=config_hashes,
+        config_snapshot=config_snapshot,
         data_cfg=load_yaml(config_paths["data"]),
         schema_hash=schema_hash,
         poetry_lock_hash=poetry_lock_hash,
         contract_id=run_id,
         contract_meta=contract_meta,
         mode="quick" if quick else "full",
+        seeds={
+            "python": seed_value,
+            "numpy": seed_value,
+            "torch": seed_value,
+            "iforest": iforest_seed,
+        },
     )
     write_run_manifest(os.path.join(report_dir, "run_manifest.json"), manifest)
 
@@ -307,7 +323,7 @@ def main(
         metrics={"iforest": metrics["iforest"], "ppo": metrics["ppo"]},
         thresholds=thresholds,
         train_times={"iforest": t1_if - t0_if, "ppo": t1_ppo - t0_ppo},
-        iforest_cfg=load_yaml(config_paths["iforest"]),
+        iforest_cfg=iforest_cfg,
         ppo_cfg=ppo_cfg,
         contract_dir=contract_dir,
         mode="quick" if quick else "full",
