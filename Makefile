@@ -23,7 +23,7 @@ serve:
 	poetry run serve --config configs/serving.yaml --data-config configs/data.yaml
 
 run:
-	python -m runs.cli main \
+	PYTHONPATH=. python -m runs.cli \
 	  --data-config configs/data.yaml \
 	  --iforest-config configs/iforest.yaml \
 	  --ppo-config configs/ppo.yaml \
@@ -31,7 +31,7 @@ run:
 	  --out-root reports/runs
 
 run_quick:
-	python -m runs.cli main \
+	PYTHONPATH=. python -m runs.cli \
 	  --data-config configs/data.yaml \
 	  --iforest-config configs/iforest.yaml \
 	  --ppo-config configs/ppo.yaml \
