@@ -153,7 +153,7 @@ def _prepare_dataset_from_arrays(
 
     rewards: list[float] = []
     for i in range(states_t.shape[0]):
-        label = cast(LabelType, "threat" if int(labels[i].item()) == 1 else "benign")
+        label: LabelType = "threat" if int(labels[i].item()) == 1 else "benign"
         severity = 1.0 if label == "threat" else 0.0
         action_name = ACTIONS[int(actions[i].item())]
         rewards.append(float(compute_reward(label, severity, action_name, rcfg)))
