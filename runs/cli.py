@@ -140,9 +140,7 @@ def _load_iforest_artifacts(model_dir: str) -> tuple[IForestModel, Preprocessor,
     return ifm, prep, threshold
 
 
-def _load_ppo_actor(
-    model_dir: str, ppo_cfg: dict[str, Any]
-) -> tuple[Actor, float]:
+def _load_ppo_actor(model_dir: str, ppo_cfg: dict[str, Any]) -> tuple[Actor, float]:
     actor = Actor(
         state_dim=ppo_cfg["rl"]["state_dim"],
         hidden=ppo_cfg["networks"]["hidden_sizes"],

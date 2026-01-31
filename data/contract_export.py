@@ -94,9 +94,9 @@ def _stack_v7(events: list[Any]) -> NDArray[np.float32]:
 def _stack_v128(events: list[Any]) -> NDArray[np.float32]:
     if not events:
         return np.zeros((0, 128), dtype=np.float32)
-    return np.stack(
-        [extract_features_v128(e, HistoryContext(now=e.ts)) for e in events]
-    ).astype(np.float32)
+    return np.stack([extract_features_v128(e, HistoryContext(now=e.ts)) for e in events]).astype(
+        np.float32
+    )
 
 
 def export_frozen_contract_to_dir(
