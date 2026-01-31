@@ -103,6 +103,7 @@ def export_frozen_contract_to_dir(
     data_cfg_path: str,
     out_dir: str,
     include_splits: bool = True,
+    contract_id: str | None = None,
 ) -> ContractPaths:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -175,7 +176,7 @@ def export_frozen_contract_to_dir(
 
     cfg = _load_yaml(data_cfg_path)
     meta = {
-        "contract_id": os.path.basename(out_dir),
+        "contract_id": contract_id or os.path.basename(out_dir),
         "git_commit": _git_commit_hash(),
         "splits": cfg.get("splits", {}),
         "schema_repr": schema_repr,
@@ -229,12 +230,14 @@ def export_frozen_contract(
     data_cfg_path: str,
     out_root: str = "./reports/contracts",
     include_splits: bool = True,
+    contract_id: str | None = None,
 ) -> ContractPaths:
     os.makedirs(out_root, exist_ok=True)
-    cid = _contract_id()
+    cid = contract_id or _contract_id()
     root = os.path.join(out_root, cid)
     return export_frozen_contract_to_dir(
         data_cfg_path=data_cfg_path,
         out_dir=root,
         include_splits=include_splits,
+        contract_id=cid,
     )

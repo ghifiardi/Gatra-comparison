@@ -103,6 +103,7 @@ def render_summary_md(
     iforest_cfg: dict[str, Any],
     ppo_cfg: dict[str, Any],
     contract_dir: str,
+    run_root: str,
     mode: str,
 ) -> str:
     counts = contract_meta.get("counts", {})
@@ -163,10 +164,18 @@ def render_summary_md(
         "- Use thresholds to tune alert volume vs recall.",
         "",
         "## Reproduce",
+        f"- Run dir: {run_root}",
         f"- Contract dir: {contract_dir}",
-        "- Command: python -m runs.cli --data-config configs/data.yaml "
-        "--iforest-config configs/iforest.yaml --ppo-config configs/ppo.yaml "
-        "--eval-config configs/eval.yaml --out-root reports/runs",
+        "- Command:",
+        f"  cd {os.path.dirname(run_root)}",
+        "  python -m runs.cli \\",
+        f"    --data-config {run_root}/config/data.yaml \\",
+        f"    --iforest-config {run_root}/config/iforest.yaml \\",
+        f"    --ppo-config {run_root}/config/ppo.yaml \\",
+        f"    --eval-config {run_root}/config/eval.yaml \\",
+        f"    --out-root {os.path.dirname(run_root)} \\",
+        f"    --run-id {run_id} \\",
+        "    --overwrite",
         "",
     ]
     return "\n".join(lines)

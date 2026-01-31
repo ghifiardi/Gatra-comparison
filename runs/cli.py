@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import subprocess
 import time
 import shutil
@@ -34,6 +35,16 @@ from runs.reporting import (
 
 
 app = typer.Typer()
+
+
+def set_global_seeds(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def _git_commit_hash() -> str:
@@ -237,10 +248,15 @@ def main(
         quick=quick,
     )
 
+    ppo_cfg = load_yaml(config_paths["ppo"])
+    seed_value = int(ppo_cfg.get("rl", {}).get("seed", 42))
+    set_global_seeds(seed_value)
+
     export_frozen_contract_to_dir(
         data_cfg_path=config_paths["data"],
         out_dir=contract_dir,
         include_splits=True,
+        contract_id=run_id,
     )
 
     x7_train, x128_train, y_train = _load_contract_split(contract_dir, "train")
@@ -256,7 +272,6 @@ def main(
     )
     t1_ppo = time.perf_counter()
 
-    ppo_cfg = load_yaml(config_paths["ppo"])
     metrics, _, thresholds = _evaluate_from_contract(
         contract_dir=contract_dir,
         iforest_dir=iforest_dir,
@@ -292,7 +307,6 @@ def main(
         poetry_lock_hash = file_sha256(lock_path)
 
     iforest_cfg = load_yaml(config_paths["iforest"])
-    seed_value = int(ppo_cfg.get("rl", {}).get("seed", 42))
     iforest_seed = int(iforest_cfg.get("model", {}).get("random_state", seed_value))
     manifest = build_run_manifest(
         run_id=run_id,
@@ -326,6 +340,7 @@ def main(
         iforest_cfg=iforest_cfg,
         ppo_cfg=ppo_cfg,
         contract_dir=contract_dir,
+        run_root=run_root,
         mode="quick" if quick else "full",
     )
     with open(os.path.join(report_dir, "summary.md"), "w") as f:

@@ -68,6 +68,7 @@ def test_render_summary_md_contains_metrics() -> None:
         iforest_cfg={"model": {"n_estimators": 100, "contamination": "auto"}},
         ppo_cfg={"train": {"epochs": 2, "batch_size": 32}, "networks": {"hidden_sizes": [64, 32]}},
         contract_dir="reports/runs/20260131T141500Z/contract",
+        run_root="reports/runs/20260131T141500Z",
         mode="quick",
     )
     assert "Run ID: 20260131T141500Z" in summary
