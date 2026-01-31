@@ -37,7 +37,7 @@ when the primary goal is per-event classification/triage.
 from __future__ import annotations
 import os
 import json
-from typing import Any
+from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 import yaml
@@ -47,7 +47,7 @@ from torch.optim import Adam
 from data.loaders import load_data
 from data.splits import time_split
 from data.features import extract_features_v128, HistoryContext
-from data.schemas import RawEvent, Label
+from data.schemas import RawEvent, Label, LabelType
 from .networks import Actor, Critic
 from .env_bandit import compute_reward, RewardConfig, ACTIONS
 from .ppo import ppo_update, PPOConfig
@@ -133,6 +133,49 @@ def _get_threat_scores_and_labels(
 
     actor.train()
     return np.array(y_true, dtype=int), np.array(y_scores, dtype=float)
+
+
+def _prepare_dataset_from_arrays(
+    x_train: NDArray[np.float32],
+    y_train: NDArray[np.int_],
+    actor: Actor,
+    rcfg: RewardConfig,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Prepare PPO tensors from precomputed feature arrays."""
+    states_t = torch.tensor(x_train, dtype=torch.float32)
+    labels = torch.tensor(y_train, dtype=torch.int64)
+
+    with torch.no_grad():
+        probs = actor(states_t)
+        dist = cast(Any, torch.distributions.Categorical)(probs=probs)
+        actions = dist.sample()
+        old_logps = dist.log_prob(actions)
+
+    rewards: list[float] = []
+    for i in range(states_t.shape[0]):
+        label: LabelType = "threat" if int(labels[i].item()) == 1 else "benign"
+        severity = 1.0 if label == "threat" else 0.0
+        action_name = ACTIONS[int(actions[i].item())]
+        rewards.append(float(compute_reward(label, severity, action_name, rcfg)))
+
+    returns_t = torch.tensor(rewards, dtype=torch.float32)
+    return states_t, actions, old_logps, returns_t
+
+
+def _get_threat_scores_from_arrays(
+    x: NDArray[np.float32],
+    y: NDArray[np.int_],
+    actor: Actor,
+) -> tuple[IntArray, FloatArray]:
+    """Compute threat scores from feature arrays."""
+    y_true = y.astype(int)
+    scores: list[float] = []
+    with torch.no_grad():
+        for row in x:
+            st = torch.tensor(row, dtype=torch.float32).unsqueeze(0)
+            probs = actor(st).squeeze(0).numpy()
+            scores.append(float(probs[0] + probs[1]))
+    return y_true, np.array(scores, dtype=float)
 
 
 def _tune_threshold_on_validation(
@@ -363,3 +406,110 @@ def train_ppo(ppo_cfg_path: str, data_cfg_path: str) -> str:
         json.dump({"epochs": logs, "final": final_log}, f, indent=2)
 
     return ckpt
+
+
+def train_ppo_from_arrays(
+    ppo_cfg_path: str,
+    x_train: NDArray[np.float32],
+    y_train: NDArray[np.int_],
+    out_dir: str,
+    x_val: NDArray[np.float32] | None = None,
+    y_val: NDArray[np.int_] | None = None,
+) -> str:
+    """Train PPO policy from precomputed feature arrays."""
+    with open(ppo_cfg_path, "r") as f:
+        cfg = yaml.safe_load(f)
+    os.makedirs(out_dir, exist_ok=True)
+
+    seed = int(cfg["rl"]["seed"])
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    hidden = list(cfg["networks"]["hidden_sizes"])
+    actor = Actor(
+        state_dim=cfg["rl"]["state_dim"], hidden=hidden, action_dim=cfg["rl"]["action_dim"]
+    )
+    critic = Critic(state_dim=cfg["rl"]["state_dim"], hidden=hidden)
+    optim = Adam(list(actor.parameters()) + list(critic.parameters()), lr=float(cfg["train"]["lr"]))
+
+    rcfg = RewardConfig(
+        tp_base=float(cfg["reward"]["tp_base"]),
+        fp_base=float(cfg["reward"]["fp_base"]),
+        fn_base=float(cfg["reward"]["fn_base"]),
+        efficiency_bonus=float(cfg["reward"]["efficiency_bonus"]),
+        action_cost={k: float(v) for k, v in cfg["reward"]["action_cost"].items()},
+    )
+    pcfg = PPOConfig(
+        lr=float(cfg["train"]["lr"]),
+        clip_ratio=float(cfg["train"]["clip_ratio"]),
+        entropy_coef=float(cfg["train"]["entropy_coef"]),
+        value_coef=float(cfg["train"]["value_coef"]),
+        max_grad_norm=float(cfg["train"]["max_grad_norm"]),
+    )
+
+    batch_size = int(cfg["train"]["batch_size"])
+    epochs = int(cfg["train"]["epochs"])
+
+    states_t, actions_t, old_logps_t, returns_t = _prepare_dataset_from_arrays(
+        x_train, y_train, actor, rcfg
+    )
+    n = states_t.shape[0]
+    idx = np.arange(n)
+
+    logs: list[dict[str, float]] = []
+    for ep in range(epochs):
+        np.random.shuffle(idx)
+        epoch_losses: list[float] = []
+        epoch_policy_losses: list[float] = []
+        epoch_value_losses: list[float] = []
+        epoch_entropies: list[float] = []
+
+        for i in range(0, n, batch_size):
+            j = idx[i : i + batch_size]
+            batch = (states_t[j], actions_t[j], old_logps_t[j], returns_t[j])
+            m = ppo_update(actor, critic, optim, batch, pcfg)
+            epoch_losses.append(m["loss"])
+            epoch_policy_losses.append(m["policy_loss"])
+            epoch_value_losses.append(m["value_loss"])
+            epoch_entropies.append(m["entropy"])
+
+        epoch_log: dict[str, float] = {
+            "epoch": float(ep),
+            "loss": float(np.mean(epoch_losses)) if epoch_losses else 0.0,
+            "policy_loss": float(np.mean(epoch_policy_losses)) if epoch_policy_losses else 0.0,
+            "value_loss": float(np.mean(epoch_value_losses)) if epoch_value_losses else 0.0,
+            "entropy": float(np.mean(epoch_entropies)) if epoch_entropies else 0.0,
+            "n_batches": float(len(epoch_losses)),
+        }
+        logs.append(epoch_log)
+
+    tune_threshold = cfg.get("validation", {}).get("tune_threshold", False)
+    if tune_threshold and x_val is not None and y_val is not None:
+        y_true_val, y_scores_val = _get_threat_scores_from_arrays(x_val, y_val, actor)
+        best_threshold, tuning_metrics = _tune_threshold_on_validation(y_true_val, y_scores_val)
+    else:
+        best_threshold = 0.5
+        tuning_metrics = {}
+
+    actor_path = os.path.join(out_dir, "actor.pt")
+    critic_path = os.path.join(out_dir, "critic.pt")
+    torch.save(actor.state_dict(), actor_path)
+    torch.save(critic.state_dict(), critic_path)
+
+    meta = {
+        "model_name": "ppo",
+        "threshold": best_threshold,
+        "threshold_tuned": bool(tune_threshold and x_val is not None and y_val is not None),
+        "train_samples": int(x_train.shape[0]),
+        "val_samples": int(x_val.shape[0]) if x_val is not None else 0,
+    }
+    if tuning_metrics:
+        meta["tuning_metrics"] = tuning_metrics
+
+    with open(os.path.join(out_dir, "meta.json"), "w") as f:
+        json.dump(meta, f, indent=2)
+
+    with open(os.path.join(out_dir, "train_log.json"), "w") as f:
+        json.dump({"epochs": logs}, f, indent=2)
+
+    return actor_path

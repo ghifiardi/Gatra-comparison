@@ -1,4 +1,4 @@
-.PHONY: format lint test train_a train_b eval serve dev
+.PHONY: format lint test train_a train_b eval serve dev run run_quick
 
 format:
 	@python3.11 -m ruff format .
@@ -21,6 +21,23 @@ eval:
 
 serve:
 	poetry run serve --config configs/serving.yaml --data-config configs/data.yaml
+
+run:
+	PYTHONPATH=. python -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --out-root reports/runs
+
+run_quick:
+	PYTHONPATH=. python -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --out-root reports/runs \
+	  --quick
 
 dev:
 	@python3.11 -m pip install -U pip

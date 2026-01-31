@@ -9,7 +9,8 @@ packages = [
   { include = "architecture_a_rl" },
   { include = "architecture_b_iforest" },
   { include = "evaluation" },
-  { include = "serving" }
+  { include = "serving" },
+  { include = "runs" }
 ]
 
 [tool.poetry.dependencies]
