@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -12,7 +12,10 @@ FEATURE_SCHEMA_VERSION = "v0.2"
 
 def _load_yaml(path: str) -> dict[str, Any]:
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected mapping in YAML config: {path}")
+    return cast(dict[str, Any], data)
 
 
 def build_feature_schema_repr(cfg: dict[str, Any]) -> dict[str, Any]:

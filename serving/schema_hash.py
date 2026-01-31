@@ -12,7 +12,8 @@ def load_expected_schema_hash(contract_dir: str) -> Optional[str]:
     if os.path.exists(meta_path):
         with open(meta_path, "r") as f:
             meta = json.load(f)
-        return meta.get("schema_hash")
+        value = meta.get("schema_hash")
+        return str(value) if value is not None else None
 
     txt_path = os.path.join(contract_dir, "schema_hash.txt")
     if os.path.exists(txt_path):

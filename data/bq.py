@@ -6,7 +6,7 @@ from typing import Any, Iterable, Mapping, Optional
 try:
     from google.cloud import bigquery
 except Exception:  # pragma: no cover - optional dependency
-    bigquery = None  # type: ignore[assignment]
+    bigquery = None
 
 
 @dataclass(frozen=True)

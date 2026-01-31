@@ -61,66 +61,66 @@ def run_head_to_head(
     actor.load_state_dict(ckpt["actor"])
     actor.eval()
 
+    y_rl_score_list: list[float]
     if contract_dir:
-        x7, x128, y_true = _load_contract_arrays(contract_dir)
+        x7, x128, y_true_arr = _load_contract_arrays(contract_dir)
 
         t0 = time.time()
         x7p = prep.transform(x7)
-        y_if_score = ifm.score(x7p)
+        y_if_score_arr = np.asarray(ifm.score(x7p), dtype=float)
 
-        y_rl_score = []
+        y_rl_score_list = []
         with torch.no_grad():
             for row in x128:
                 st = torch.tensor(row, dtype=torch.float32).unsqueeze(0)
                 probs = actor(st).squeeze(0).numpy()
-                y_rl_score.append(float(probs[0] + probs[1]))
+                y_rl_score_list.append(float(probs[0] + probs[1]))
         t1 = time.time()
-        infer_ms = (t1 - t0) * 1000.0 / max(1, len(y_true))
+        infer_ms = (t1 - t0) * 1000.0 / max(1, len(y_true_arr))
 
-        y_if_score = np.array(y_if_score, dtype=float)
-        y_rl_score = np.array(y_rl_score, dtype=float)
+        y_rl_score_arr = np.asarray(y_rl_score_list, dtype=float)
     else:
         loaded = load_data(data_cfg)
         splits = time_split(loaded.events, loaded.labels, data_cfg)
         test_events, test_labels = splits.test
         label_map = {lb.event_id: lb for lb in test_labels}
 
-        y_true = []
-        y_if_score = []
-        y_rl_score = []
+        y_true_list: list[int] = []
+        y_if_score_list: list[float] = []
+        y_rl_score_list = []
 
         t0 = time.time()
         for e in test_events:
             lb = label_map.get(e.event_id)
             if lb is None or lb.label == "unknown":
                 continue
-            y_true.append(1 if lb.label == "threat" else 0)
+            y_true_list.append(1 if lb.label == "threat" else 0)
 
             x7 = extract_features_v7(e)[None, :]
             x7p = prep.transform(x7)
             s_if = float(ifm.score(x7p)[0])
-            y_if_score.append(s_if)
+            y_if_score_list.append(s_if)
 
             s128 = extract_features_v128(e, HistoryContext(now=e.ts))
             st = torch.tensor(s128, dtype=torch.float32).unsqueeze(0)
             with torch.no_grad():
                 probs = actor(st).squeeze(0).numpy()
-            y_rl_score.append(float(probs[0] + probs[1]))
+            y_rl_score_list.append(float(probs[0] + probs[1]))
 
         t1 = time.time()
-        infer_ms = (t1 - t0) * 1000.0 / max(1, len(y_true))
+        infer_ms = (t1 - t0) * 1000.0 / max(1, len(y_true_list))
 
-        y_true = np.array(y_true, dtype=int)
-        y_if_score = np.array(y_if_score, dtype=float)
-        y_rl_score = np.array(y_rl_score, dtype=float)
+        y_true_arr = np.array(y_true_list, dtype=int)
+        y_if_score_arr = np.array(y_if_score_list, dtype=float)
+        y_rl_score_arr = np.array(y_rl_score_list, dtype=float)
 
     m_if = classification_metrics(
-        y_true, y_if_score, threshold=float(i_cfg["scoring"]["threshold"])
+        y_true_arr, y_if_score_arr, threshold=float(i_cfg["scoring"]["threshold"])
     )
-    m_rl = classification_metrics(y_true, y_rl_score, threshold=0.5)
+    m_rl = classification_metrics(y_true_arr, y_rl_score_arr, threshold=0.5)
 
     report = {
-        "n_test": int(len(y_true)),
+        "n_test": int(len(y_true_arr)),
         "iforest": m_if,
         "rl": m_rl,
         "infer_latency_ms_per_event": float(infer_ms),

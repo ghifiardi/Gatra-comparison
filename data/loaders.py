@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Iterable, Literal, Optional, Mapping, cast
 
 import pandas as pd
 import yaml
 
 from .bq import BQTableRef, bq_client, fetch_rows_timewindow, fetch_rows_all
-from .schemas import RawEvent, Label
+from .schemas import RawEvent, Label, LabelType
 from .toy import ToyDataset
 
 SourceType = Literal["toy", "csv", "parquet", "bigquery"]
@@ -22,73 +22,93 @@ class LoadedData:
 
 def _load_yaml(path: str) -> dict[str, Any]:
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected mapping in YAML config: {path}")
+    return cast(dict[str, Any], data)
 
 
 def _parse_ts(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value
     if hasattr(value, "to_pydatetime"):
-        return value.to_pydatetime()
+        return cast(datetime, value.to_pydatetime())
     return datetime.fromisoformat(str(value))
 
+def _opt_str(row: Mapping[str, Any], key: Optional[str]) -> Optional[str]:
+    if not key:
+        return None
+    value = row.get(key)
+    return None if value is None else str(value)
 
-def _map_events(rows: Iterable[dict[str, Any]], mapping: dict[str, str]) -> list[RawEvent]:
+
+def _opt_int(row: Mapping[str, Any], key: Optional[str]) -> Optional[int]:
+    if not key:
+        return None
+    value = row.get(key)
+    return None if value is None else int(value)
+
+
+def _opt_float(row: Mapping[str, Any], key: Optional[str]) -> Optional[float]:
+    if not key:
+        return None
+    value = row.get(key)
+    return None if value is None else float(value)
+
+
+def _normalize_label(value: Any) -> LabelType:
+    if isinstance(value, str):
+        v = value.lower()
+        if v in ("threat", "benign", "unknown"):
+            return cast(LabelType, v)
+    return "unknown"
+
+
+def _map_events(rows: Iterable[Mapping[str, Any]], mapping: Mapping[str, str]) -> list[RawEvent]:
     events: list[RawEvent] = []
+    src_key = mapping.get("src_ip")
+    dst_key = mapping.get("dst_ip")
+    port_key = mapping.get("port")
+    protocol_key = mapping.get("protocol")
+    duration_key = mapping.get("duration")
+    bytes_sent_key = mapping.get("bytes_sent")
+    bytes_received_key = mapping.get("bytes_received")
+    user_key = mapping.get("user_id")
+    host_key = mapping.get("host_id")
     for r in rows:
         events.append(
             RawEvent(
                 event_id=str(r.get(mapping["event_id"])),
                 ts=_parse_ts(r.get(mapping["ts"])),
-                src_ip=str(r.get(mapping.get("src_ip"))) if mapping.get("src_ip") else None,
-                dst_ip=str(r.get(mapping.get("dst_ip"))) if mapping.get("dst_ip") else None,
-                port=int(r.get(mapping.get("port")))
-                if r.get(mapping.get("port")) is not None
-                else None,
-                protocol=(
-                    str(r.get(mapping.get("protocol")))
-                    if r.get(mapping.get("protocol")) is not None
-                    else None
-                ),
-                duration=(
-                    float(r.get(mapping.get("duration")))
-                    if r.get(mapping.get("duration")) is not None
-                    else None
-                ),
-                bytes_sent=(
-                    float(r.get(mapping.get("bytes_sent")))
-                    if r.get(mapping.get("bytes_sent")) is not None
-                    else None
-                ),
-                bytes_received=(
-                    float(r.get(mapping.get("bytes_received")))
-                    if r.get(mapping.get("bytes_received")) is not None
-                    else None
-                ),
-                user_id=(
-                    str(r.get(mapping.get("user_id")))
-                    if r.get(mapping.get("user_id")) is not None
-                    else None
-                ),
-                host_id=(
-                    str(r.get(mapping.get("host_id")))
-                    if r.get(mapping.get("host_id")) is not None
-                    else None
-                ),
+                src_ip=_opt_str(r, src_key),
+                dst_ip=_opt_str(r, dst_key),
+                port=_opt_int(r, port_key),
+                protocol=_opt_str(r, protocol_key),
+                duration=_opt_float(r, duration_key),
+                bytes_sent=_opt_float(r, bytes_sent_key),
+                bytes_received=_opt_float(r, bytes_received_key),
+                user_id=_opt_str(r, user_key),
+                host_id=_opt_str(r, host_key),
             )
         )
     return events
 
 
-def _map_labels(rows: Iterable[dict[str, Any]], mapping: dict[str, str]) -> list[Label]:
+def _map_labels(rows: Iterable[Mapping[str, Any]], mapping: Mapping[str, str]) -> list[Label]:
     labels: list[Label] = []
+    label_key = mapping.get("label")
+    severity_key = mapping.get("severity")
+    source_key = mapping.get("source")
     for r in rows:
+        label_value = r.get(label_key) if label_key else None
+        severity_value = r.get(severity_key) if severity_key else None
+        source_value = r.get(source_key) if source_key else None
         labels.append(
             Label(
                 event_id=str(r.get(mapping["event_id"])),
-                label=str(r.get(mapping.get("label")) or "unknown"),
-                severity=float(r.get(mapping.get("severity")) or 0.0),
-                source=str(r.get(mapping.get("source")) or "unknown"),
+                label=_normalize_label(label_value),
+                severity=float(severity_value or 0.0),
+                source=str(source_value or "unknown"),
             )
         )
     return labels
@@ -114,8 +134,8 @@ def load_bigquery(cfg: dict[str, Any]) -> LoadedData:
     dataset_cfg = cfg["dataset"]
     labels_cfg = cfg.get("labels", {})
     mapping_cfg = cfg.get("mapping", {})
-    ev_map = mapping_cfg.get("events", {})
-    lb_map = mapping_cfg.get("labels", {})
+    ev_map = cast(dict[str, str], mapping_cfg.get("events", {}))
+    lb_map = cast(dict[str, str], mapping_cfg.get("labels", {}))
 
     project = dataset_cfg["bq_project"]
     dataset = dataset_cfg["bq_dataset"]
@@ -132,6 +152,12 @@ def load_bigquery(cfg: dict[str, Any]) -> LoadedData:
     end = splits["test"]["end"]
 
     client = bq_client()
+
+    for key in ("event_id", "ts"):
+        if key not in ev_map:
+            raise ValueError(f"Missing required events mapping key: {key}")
+    if "event_id" not in lb_map:
+        raise ValueError("Missing required labels mapping key: event_id")
 
     ev_rows = list(
         fetch_rows_timewindow(

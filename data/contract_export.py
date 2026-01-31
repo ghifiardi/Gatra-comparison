@@ -5,7 +5,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -47,7 +47,10 @@ def _git_commit_hash() -> str:
 
 def _load_yaml(path: str) -> dict[str, Any]:
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected mapping in YAML config: {path}")
+    return cast(dict[str, Any], data)
 
 
 def export_frozen_contract(
