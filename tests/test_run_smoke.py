@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from runs.cli import main as run_main
 
 
@@ -49,6 +50,7 @@ features:
 
 
 def test_run_cli_quick_smoke(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
     data_cfg = tmp_path / "data.yaml"
     _write_data_config(data_cfg)
 
