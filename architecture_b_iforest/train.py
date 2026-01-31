@@ -190,3 +190,50 @@ def train_iforest(iforest_cfg: str, data_cfg: str) -> str:
         json.dump(train_log, f, indent=2)
 
     return path
+
+
+def train_iforest_from_arrays(
+    iforest_cfg: str,
+    X_train: NDArray[np.float32],
+    out_dir: str,
+) -> str:
+    """Train Isolation Forest from precomputed feature arrays."""
+    with open(iforest_cfg, "r") as f:
+        cfg = yaml.safe_load(f)
+    os.makedirs(out_dir, exist_ok=True)
+
+    prep = Preprocessor()
+    Xp = prep.fit_transform(X_train)
+
+    mcfg = cfg["model"]
+    model = IsolationForest(
+        n_estimators=mcfg["n_estimators"],
+        max_samples=mcfg["max_samples"],
+        contamination=mcfg["contamination"],
+        max_features=mcfg["max_features"],
+        bootstrap=mcfg["bootstrap"],
+        random_state=mcfg["random_state"],
+        n_jobs=-1,
+    )
+    model.fit(Xp)
+
+    ifm = IForestModel(model=model, threshold=float(cfg["scoring"]["threshold"]))
+    ifm.fit_calibration(Xp)
+
+    model_path = os.path.join(out_dir, "model.joblib")
+    scaler_path = os.path.join(out_dir, "scaler.joblib")
+    joblib.dump(ifm, model_path)
+    joblib.dump(prep, scaler_path)
+
+    meta = {
+        "model_name": "iforest",
+        "threshold": ifm.threshold,
+        "n_estimators": mcfg["n_estimators"],
+        "calibration_min": ifm.calibration_min,
+        "calibration_max": ifm.calibration_max,
+        "train_samples": int(X_train.shape[0]),
+    }
+    with open(os.path.join(out_dir, "meta.json"), "w") as f:
+        json.dump(meta, f, indent=2)
+
+    return model_path
