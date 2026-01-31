@@ -3,7 +3,7 @@ from __future__ import annotations
 from runs.reporting import build_run_manifest, render_summary_md
 
 
-def test_build_run_manifest_minimal():
+def test_build_run_manifest_minimal() -> None:
     manifest = build_run_manifest(
         run_id="20260131T141500Z",
         created_at="2026-01-31T14:15:00Z",
@@ -45,7 +45,7 @@ def test_build_run_manifest_minimal():
     assert manifest["seeds"]["torch"] == 42
 
 
-def test_render_summary_md_contains_metrics():
+def test_render_summary_md_contains_metrics() -> None:
     summary = render_summary_md(
         run_id="20260131T141500Z",
         git_commit="deadbeef",

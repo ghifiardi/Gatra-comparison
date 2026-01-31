@@ -47,7 +47,7 @@ from torch.optim import Adam
 from data.loaders import load_data
 from data.splits import time_split
 from data.features import extract_features_v128, HistoryContext
-from data.schemas import RawEvent, Label
+from data.schemas import RawEvent, Label, LabelType
 from .networks import Actor, Critic
 from .env_bandit import compute_reward, RewardConfig, ACTIONS
 from .ppo import ppo_update, PPOConfig
@@ -153,7 +153,7 @@ def _prepare_dataset_from_arrays(
 
     rewards: list[float] = []
     for i in range(states_t.shape[0]):
-        label = "threat" if int(labels[i].item()) == 1 else "benign"
+        label = cast(LabelType, "threat" if int(labels[i].item()) == 1 else "benign")
         severity = 1.0 if label == "threat" else 0.0
         action_name = ACTIONS[int(actions[i].item())]
         rewards.append(float(compute_reward(label, severity, action_name, rcfg)))
