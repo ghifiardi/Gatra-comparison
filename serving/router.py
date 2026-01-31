@@ -24,6 +24,7 @@ INVALID_FEATURE_COUNTERS = {
     "dim_mismatch": 0,
     "nan_inf": 0,
     "dtype": 0,
+    "schema_mismatch": 0,
     "unknown": 0,
 }
 
@@ -113,7 +114,24 @@ def handle_request(
     active: str,
     iforest: Optional[IForestScorer] = None,
     ppo: Optional[PPOScorer] = None,
+    expected_schema_hash: Optional[str] = None,
+    current_schema_hash: Optional[str] = None,
 ) -> Tuple[int, Dict[str, Any]]:
+    if expected_schema_hash and current_schema_hash and expected_schema_hash != current_schema_hash:
+        _record_invalid_feature(
+            "schema_mismatch",
+            "schema",
+            f"Expected schema hash {expected_schema_hash}, got {current_schema_hash}",
+        )
+        return 400, _error_response(
+            error_code="FEATURE_SCHEMA_MISMATCH",
+            feature_version="schema",
+            expected_dim=0,
+            actual_dim=None,
+            message="Feature schema hash mismatch",
+            request_id=req.request_id,
+        )
+
     v7, err = _validate_features(
         req.features_v7,
         version="v7",
@@ -180,7 +198,12 @@ def route_request(
     active: str,
     iforest: Optional[IForestScorer] = None,
     ppo: Optional[PPOScorer] = None,
+    expected_schema_hash: Optional[str] = None,
+    current_schema_hash: Optional[str] = None,
 ) -> InferenceResponse:
+    if expected_schema_hash and current_schema_hash and expected_schema_hash != current_schema_hash:
+        raise ValueError("Feature schema hash mismatch")
+
     v7 = validate_feature_vector(req.features_v7, expected_dim=7)
     v128 = validate_feature_vector(req.features_v128, expected_dim=128)
     return _predict(req, mode, active, v7, v128, iforest, ppo)

@@ -11,8 +11,9 @@ def main(
     data_config: str = "configs/data.yaml",
     iforest_config: str = "configs/iforest.yaml",
     ppo_config: str = "configs/ppo.yaml",
+    contract_dir: str | None = None,
 ) -> None:
-    path = run_head_to_head(eval_config, data_config, iforest_config, ppo_config)
+    path = run_head_to_head(eval_config, data_config, iforest_config, ppo_config, contract_dir)
     typer.echo(f"Saved report -> {path}")
 
 

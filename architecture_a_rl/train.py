@@ -37,8 +37,8 @@ when the primary goal is per-event classification/triage.
 from __future__ import annotations
 import os
 import json
-from typing import Any
 import numpy as np
+from typing import Any, cast
 from numpy.typing import NDArray
 import yaml
 import torch
@@ -79,9 +79,9 @@ def _prepare_dataset(
 
         with torch.no_grad():
             probs = actor(s_t.unsqueeze(0)).squeeze(0)
-            dist = torch.distributions.Categorical(probs=probs)
-            a = dist.sample()  # type: ignore[no-untyped-call]
-            logp = dist.log_prob(a)  # type: ignore[no-untyped-call]
+            dist = cast(Any, torch.distributions.Categorical)(probs=probs)
+            a = dist.sample()
+            logp = dist.log_prob(a)
 
         action_name = ACTIONS[int(a.item())]
         r = compute_reward(lb.label, float(lb.severity), action_name, rcfg)

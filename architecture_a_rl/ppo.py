@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Any, cast
 import torch
 import torch.nn.functional as F
 from torch.optim import Optimizer
@@ -25,8 +26,8 @@ def ppo_update(
 ) -> dict[str, float]:
     states, actions, old_logp, returns = batch
     probs = actor(states)
-    dist = torch.distributions.Categorical(probs=probs)
-    logp = dist.log_prob(actions)  # type: ignore[no-untyped-call]
+    dist = cast(Any, torch.distributions.Categorical)(probs=probs)
+    logp = dist.log_prob(actions)
 
     ratio = torch.exp(logp - old_logp)
     adv = returns - critic(states).detach()
@@ -38,7 +39,7 @@ def ppo_update(
     values = critic(states)
     value_loss = F.mse_loss(values, returns)
 
-    entropy = dist.entropy().mean()  # type: ignore[no-untyped-call]
+    entropy = dist.entropy().mean()
     loss = policy_loss + cfg.value_coef * value_loss - cfg.entropy_coef * entropy
 
     optim.zero_grad(set_to_none=True)
