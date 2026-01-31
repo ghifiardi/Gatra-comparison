@@ -1,12 +1,16 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
+from typing import Sequence, cast
 import numpy as np
+from numpy.typing import NDArray
 from .schemas import RawEvent
 
 
-def validate_feature_vector(vec: np.ndarray | Sequence[float], expected_dim: int) -> np.ndarray:
+def validate_feature_vector(
+    vec: NDArray[np.generic] | Sequence[float | int | str],
+    expected_dim: int,
+) -> NDArray[np.float32]:
     arr = np.asarray(vec)
     if arr.dtype.kind in ("O", "U", "S"):
         raise ValueError(f"Feature vector must be numeric, got dtype={arr.dtype}")
@@ -20,7 +24,7 @@ def validate_feature_vector(vec: np.ndarray | Sequence[float], expected_dim: int
     arr = arr.astype(np.float32, copy=False)
     if not np.isfinite(arr).all():
         raise ValueError("Feature vector contains NaN or Inf values")
-    return arr
+    return cast(NDArray[np.float32], arr)
 
 
 def _safe_float(x: float | None) -> float:
@@ -31,7 +35,7 @@ def _safe_int(x: int | None) -> int:
     return int(x) if x is not None else 0
 
 
-def extract_features_v7(e: RawEvent) -> np.ndarray:
+def extract_features_v7(e: RawEvent) -> NDArray[np.float32]:
     # duration, bytes_sent, bytes_received, port, protocol_encoded, hour, dow
     protocol = (e.protocol or "").lower()
     protocol_encoded = 1.0 if protocol == "tcp" else 0.0
@@ -59,7 +63,7 @@ class HistoryContext:
     now: datetime
 
 
-def extract_features_v128(e: RawEvent, ctx: HistoryContext) -> np.ndarray:
+def extract_features_v128(e: RawEvent, ctx: HistoryContext) -> NDArray[np.float32]:
     # Minimal deterministic 128D: fill with derived stats + padding.
     v7 = extract_features_v7(e).astype(np.float32)
     out = np.zeros((128,), dtype=np.float32)

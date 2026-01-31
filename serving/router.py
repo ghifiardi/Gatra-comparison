@@ -1,13 +1,24 @@
 from __future__ import annotations
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Protocol
 import logging
 import numpy as np
+from numpy.typing import NDArray
 from architecture_a_rl.env_bandit import ACTIONS
 from data.features import validate_feature_vector
 from .contract import InferenceRequest, InferenceResponse, InferenceErrorResponse
-from .adapters import IForestAdapter, PPOAdapter
 
 logger = logging.getLogger(__name__)
+
+FloatArray = NDArray[np.float32]
+
+
+class IForestScorer(Protocol):
+    def score(self, features_v7: FloatArray) -> float: ...
+
+
+class PPOScorer(Protocol):
+    def action_probs(self, features_v128: FloatArray) -> list[float]: ...
+
 
 INVALID_FEATURE_COUNTERS = {
     "dim_mismatch": 0,
@@ -66,7 +77,7 @@ def _validate_features(
     version: str,
     expected_dim: int,
     request_id: Optional[str],
-) -> Tuple[Optional[np.ndarray], Optional[Dict[str, Any]]]:
+) -> Tuple[Optional[NDArray[np.float32]], Optional[Dict[str, Any]]]:
     try:
         validated = validate_feature_vector(features, expected_dim=expected_dim)
         return validated, None
@@ -100,8 +111,8 @@ def handle_request(
     req: InferenceRequest,
     mode: str,
     active: str,
-    iforest: Optional[IForestAdapter] = None,
-    ppo: Optional[PPOAdapter] = None,
+    iforest: Optional[IForestScorer] = None,
+    ppo: Optional[PPOScorer] = None,
 ) -> Tuple[int, Dict[str, Any]]:
     v7, err = _validate_features(
         req.features_v7,
@@ -121,6 +132,16 @@ def handle_request(
     if err:
         return 400, err
 
+    if v7 is None or v128 is None:
+        return 400, _error_response(
+            error_code="FEATURE_DTYPE",
+            feature_version="unknown",
+            expected_dim=0,
+            actual_dim=None,
+            message="Feature validation failed",
+            request_id=req.request_id,
+        )
+
     response = _predict(req, mode, active, v7, v128, iforest, ppo)
     return 200, response.model_dump()
 
@@ -129,10 +150,10 @@ def _predict(
     req: InferenceRequest,
     mode: str,
     active: str,
-    features_v7: np.ndarray,
-    features_v128: np.ndarray,
-    iforest: Optional[IForestAdapter],
-    ppo: Optional[PPOAdapter],
+    features_v7: FloatArray,
+    features_v128: FloatArray,
+    iforest: Optional[IForestScorer],
+    ppo: Optional[PPOScorer],
 ) -> InferenceResponse:
     iforest_score = iforest.score(features_v7) if iforest else None
     rl_action_probs = ppo.action_probs(features_v128) if ppo else None
@@ -157,7 +178,9 @@ def route_request(
     req: InferenceRequest,
     mode: str,
     active: str,
-    iforest: Optional[IForestAdapter] = None,
-    ppo: Optional[PPOAdapter] = None,
+    iforest: Optional[IForestScorer] = None,
+    ppo: Optional[PPOScorer] = None,
 ) -> InferenceResponse:
-    return _predict(req, mode, active, req.features_v7, req.features_v128, iforest, ppo)
+    v7 = validate_feature_vector(req.features_v7, expected_dim=7)
+    v128 = validate_feature_vector(req.features_v128, expected_dim=128)
+    return _predict(req, mode, active, v7, v128, iforest, ppo)

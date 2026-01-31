@@ -1,7 +1,9 @@
 from __future__ import annotations
 import os
 import json
+from typing import Any
 import numpy as np
+from numpy.typing import NDArray
 import yaml
 import joblib
 from sklearn.ensemble import IsolationForest
@@ -13,13 +15,16 @@ from data.schemas import RawEvent, Label
 from .preprocess import Preprocessor
 from .model import IForestModel
 
+FloatArray = NDArray[np.floating[Any]]
+IntArray = NDArray[np.int_]
+
 
 def _get_scores_and_labels(
     events: list[RawEvent],
     labels: list[Label],
     prep: Preprocessor,
     ifm: IForestModel,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[IntArray, FloatArray]:
     """Extract anomaly scores and ground truth labels for a data split."""
     label_map = {lb.event_id: lb for lb in labels}
 
@@ -38,12 +43,12 @@ def _get_scores_and_labels(
         score = ifm.score(x7p)[0]
         y_scores.append(float(score))
 
-    return np.array(y_true), np.array(y_scores)
+    return np.array(y_true, dtype=int), np.array(y_scores, dtype=float)
 
 
 def _tune_threshold_on_validation(
-    y_true: np.ndarray,
-    y_scores: np.ndarray,
+    y_true: IntArray,
+    y_scores: FloatArray,
     thresholds: list[float] | None = None,
 ) -> tuple[float, dict[str, float]]:
     """Find optimal threshold that maximizes F1 score on validation set.

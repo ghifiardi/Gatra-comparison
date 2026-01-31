@@ -1,10 +1,13 @@
 from __future__ import annotations
 import numpy as np
+from numpy.typing import NDArray
 from sklearn.metrics import precision_recall_fscore_support, roc_auc_score, average_precision_score
 
 
 def classification_metrics(
-    y_true: np.ndarray, y_score: np.ndarray, threshold: float
+    y_true: NDArray[np.int_],
+    y_score: NDArray[np.float64],
+    threshold: float,
 ) -> dict[str, float]:
     y_pred = (y_score >= threshold).astype(int)
     p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="binary", zero_division=0)

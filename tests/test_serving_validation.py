@@ -1,15 +1,16 @@
 import numpy as np
+from numpy.typing import NDArray
 from serving.contract import InferenceRequest
 from serving.router import handle_request
 
 
 class DummyIForest:
-    def score(self, features_v7):
+    def score(self, features_v7: NDArray[np.float32]) -> float:
         return 0.42
 
 
 class DummyPPO:
-    def action_probs(self, features_v128):
+    def action_probs(self, features_v128: NDArray[np.float32]) -> list[float]:
         return [0.1, 0.2, 0.3, 0.4]
 
 

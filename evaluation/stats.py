@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
+from numpy.typing import NDArray
 
 
 @dataclass
@@ -10,7 +11,7 @@ class BootstrapResult:
     high: float
 
 
-def bootstrap_mean(values: np.ndarray, n: int = 1000, seed: int = 0) -> BootstrapResult:
+def bootstrap_mean(values: NDArray[np.float64], n: int = 1000, seed: int = 0) -> BootstrapResult:
     if values.size == 0:
         nan = float("nan")
         return BootstrapResult(mean=nan, low=nan, high=nan)

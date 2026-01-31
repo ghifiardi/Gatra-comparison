@@ -1,7 +1,12 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from typing import Any
 import numpy as np
+from numpy.typing import NDArray
 from sklearn.ensemble import IsolationForest
+
+FloatArray = NDArray[np.floating[Any]]
+IntArray = NDArray[np.int_]
 
 
 @dataclass
@@ -25,7 +30,7 @@ class IForestModel:
     calibration_min: float | None = field(default=None)
     calibration_max: float | None = field(default=None)
 
-    def fit_calibration(self, X_train: np.ndarray) -> "IForestModel":
+    def fit_calibration(self, X_train: FloatArray) -> "IForestModel":
         """Compute calibration statistics from training data.
 
         This should be called after fitting the IsolationForest model
@@ -42,7 +47,7 @@ class IForestModel:
         self.calibration_max = float(raw_scores.max())
         return self
 
-    def score(self, X: np.ndarray) -> np.ndarray:
+    def score(self, X: FloatArray) -> FloatArray:
         """Compute anomaly scores in [0, 1] range.
 
         Uses fixed calibration statistics from training set to ensure
@@ -67,9 +72,9 @@ class IForestModel:
         denom = (mx - mn) if mx > mn else 1.0
         # Invert so higher = more anomalous
         s = (mx - raw) / denom
-        result: np.ndarray = np.clip(s, 0.0, 1.0)
+        result: FloatArray = np.clip(s, 0.0, 1.0)
         return result
 
-    def predict_alert(self, scores: np.ndarray) -> np.ndarray:
+    def predict_alert(self, scores: FloatArray) -> IntArray:
         """Convert scores to binary predictions using threshold."""
         return (scores >= self.threshold).astype(np.int32)

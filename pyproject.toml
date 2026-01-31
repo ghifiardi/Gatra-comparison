@@ -27,6 +27,7 @@ rich = "^13.7.0"
 pytest = "^8.0.0"
 ruff = "^0.4.0"
 mypy = "^1.8.0"
+types-PyYAML = "^6.0.12.20240101"
 
 [tool.ruff]
 line-length = 100
@@ -35,6 +36,7 @@ line-length = 100
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+exclude = "^(docs/|scripts/|_local_data/|artifacts/|runs/)"
 
 [tool.poetry.scripts]
 train_b = "architecture_b_iforest.cli:app"

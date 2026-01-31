@@ -37,7 +37,9 @@ when the primary goal is per-event classification/triage.
 from __future__ import annotations
 import os
 import json
+from typing import Any
 import numpy as np
+from numpy.typing import NDArray
 import yaml
 import torch
 from sklearn.metrics import f1_score, precision_recall_fscore_support
@@ -49,6 +51,9 @@ from data.schemas import RawEvent, Label
 from .networks import Actor, Critic
 from .env_bandit import compute_reward, RewardConfig, ACTIONS
 from .ppo import ppo_update, PPOConfig
+
+FloatArray = NDArray[np.floating[Any]]
+IntArray = NDArray[np.int_]
 
 
 def _prepare_dataset(
@@ -98,7 +103,7 @@ def _get_threat_scores_and_labels(
     events: list[RawEvent],
     labels: list[Label],
     actor: Actor,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[IntArray, FloatArray]:
     """Extract threat scores and ground truth labels for threshold tuning.
 
     The threat score is computed as: P(escalate) + P(contain), i.e., the
@@ -127,12 +132,12 @@ def _get_threat_scores_and_labels(
             y_scores.append(threat_score)
 
     actor.train()
-    return np.array(y_true), np.array(y_scores)
+    return np.array(y_true, dtype=int), np.array(y_scores, dtype=float)
 
 
 def _tune_threshold_on_validation(
-    y_true: np.ndarray,
-    y_scores: np.ndarray,
+    y_true: IntArray,
+    y_scores: FloatArray,
     thresholds: list[float] | None = None,
 ) -> tuple[float, dict[str, float]]:
     """Find optimal threshold that maximizes F1 score on validation set.

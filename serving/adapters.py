@@ -1,11 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
 import numpy as np
+from numpy.typing import NDArray
 import joblib
 import torch
 from architecture_a_rl.networks import Actor
 from architecture_b_iforest.model import IForestModel
+
+FloatArray = NDArray[np.float32]
 
 
 @dataclass
@@ -18,8 +21,8 @@ class IForestAdapter:
         bundle = joblib.load(bundle_path)
         return cls(preprocessor=bundle["preprocessor"], model=bundle["model"])
 
-    def score(self, features_v7: List[float]) -> float:
-        x = np.array(features_v7, dtype=np.float32)[None, :]
+    def score(self, features_v7: FloatArray) -> float:
+        x = np.asarray(features_v7, dtype=np.float32)[None, :]
         x = self.preprocessor.transform(x)
         return float(self.model.score(x)[0])
 
@@ -42,7 +45,7 @@ class PPOAdapter:
         actor.eval()
         return cls(actor=actor)
 
-    def action_probs(self, features_v128: List[float]) -> List[float]:
+    def action_probs(self, features_v128: FloatArray) -> list[float]:
         x = torch.tensor(features_v128, dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
             probs = self.actor(x).squeeze(0).numpy()
