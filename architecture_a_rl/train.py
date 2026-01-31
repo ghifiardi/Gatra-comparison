@@ -79,7 +79,7 @@ def _prepare_dataset(
 
         with torch.no_grad():
             probs = actor(s_t.unsqueeze(0)).squeeze(0)
-            dist = torch.distributions.Categorical(probs=probs)  # type: ignore[no-untyped-call]
+            dist = torch.distributions.Categorical(probs=probs)
             a = dist.sample()  # type: ignore[no-untyped-call]
             logp = dist.log_prob(a)  # type: ignore[no-untyped-call]
 
