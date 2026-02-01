@@ -1,11 +1,13 @@
-.PHONY: format lint test train_a train_b eval serve dev run run_quick
+PY ?= python3.11
+
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust
 
 format:
-	@python3.11 -m ruff format .
+	@$(PY) -m ruff format .
 
 lint:
-	@python3.11 -m ruff format --check .
-	@python3.11 -m ruff check .
+	@$(PY) -m ruff format --check .
+	@$(PY) -m ruff check .
 
 test: pytest
 
@@ -23,7 +25,7 @@ serve:
 	poetry run serve --config configs/serving.yaml --data-config configs/data.yaml
 
 run:
-	PYTHONPATH=. python -m runs.cli \
+	PYTHONPATH=. $(PY) -m runs.cli \
 	  --data-config configs/data.yaml \
 	  --iforest-config configs/iforest.yaml \
 	  --ppo-config configs/ppo.yaml \
@@ -31,7 +33,7 @@ run:
 	  --out-root reports/runs
 
 run_quick:
-	PYTHONPATH=. python -m runs.cli \
+	PYTHONPATH=. $(PY) -m runs.cli \
 	  --data-config configs/data.yaml \
 	  --iforest-config configs/iforest.yaml \
 	  --ppo-config configs/ppo.yaml \
@@ -39,9 +41,27 @@ run_quick:
 	  --out-root reports/runs \
 	  --quick
 
+robustness:
+	PYTHONPATH=. $(PY) -m evaluation.robustness \
+	  --contract-dir $(CONTRACT_DIR) \
+	  --iforest-model-dir $(IF_DIR) \
+	  --ppo-model-dir $(PPO_DIR) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --robustness-config configs/robustness.yaml \
+	  --out-dir $(OUT_DIR)
+
+run_robust:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --robustness-config configs/robustness.yaml \
+	  --out-root reports/runs
+
 dev:
-	@python3.11 -m pip install -U pip
-	@python3.11 -m pip install -U ruff
+	@$(PY) -m pip install -U pip
+	@$(PY) -m pip install -U ruff
 
 pytest:
-	@PYTHONPATH="$(CURDIR)" python3.11 -m pytest -q
+	@PYTHONPATH="$(CURDIR)" $(PY) -m pytest -q
