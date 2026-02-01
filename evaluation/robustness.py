@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import joblib
 import numpy as np
@@ -26,13 +26,44 @@ from evaluation.variants import (
 
 FloatArr = NDArray[np.float32]
 IntArr = NDArray[np.int8]
+MissingStrategy = Literal["mcar", "topk"]
+MissingFill = Literal["zero", "mean", "median"]
+NoiseDistribution = Literal["gaussian", "laplace"]
+LabelDelayPolicy = Literal["treat_as_benign", "treat_as_unknown", "drop"]
 
 app = typer.Typer()
 
 
 def _read_yaml(path: str) -> dict[str, Any]:
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        payload = yaml.safe_load(f)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected mapping in YAML config: {path}")
+    return cast(dict[str, Any], payload)
+
+
+def _as_missing_strategy(value: str) -> MissingStrategy:
+    if value not in ("mcar", "topk"):
+        raise ValueError(f"Unknown missingness strategy: {value}")
+    return cast(MissingStrategy, value)
+
+
+def _as_missing_fill(value: str) -> MissingFill:
+    if value not in ("zero", "mean", "median"):
+        raise ValueError(f"Unknown missingness fill: {value}")
+    return cast(MissingFill, value)
+
+
+def _as_noise_distribution(value: str) -> NoiseDistribution:
+    if value not in ("gaussian", "laplace"):
+        raise ValueError(f"Unknown noise distribution: {value}")
+    return cast(NoiseDistribution, value)
+
+
+def _as_label_policy(value: str) -> LabelDelayPolicy:
+    if value not in ("treat_as_benign", "treat_as_unknown", "drop"):
+        raise ValueError(f"Unknown label delay policy: {value}")
+    return cast(LabelDelayPolicy, value)
 
 
 def _load_contract_test(contract_dir: str) -> tuple[FloatArr, FloatArr, IntArr]:
@@ -170,15 +201,15 @@ def run_robustness_suite(
 
         elif kind == "missingness":
             rate = float(v["rate"])
-            strategy = str(v.get("strategy", "mcar"))
-            fill = str(v.get("fill", "zero"))
+            strategy = _as_missing_strategy(str(v.get("strategy", "mcar")))
+            fill = _as_missing_fill(str(v.get("fill", "zero")))
             X7 = apply_missingness(X7_base, rate, strategy, fill, rng)
             X128 = apply_missingness(X128_base, rate, strategy, fill, rng)
             batches = [VariantBatch(name=name, X7=X7, X128=X128, y=y_base, meta={"missingness": v})]
 
         elif kind == "noise":
             sigma = float(v["sigma"])
-            dist = str(v.get("distribution", "gaussian"))
+            dist = _as_noise_distribution(str(v.get("distribution", "gaussian")))
             clamp = bool(v.get("clamp", True))
             X7 = apply_noise(X7_base, sigma, dist, clamp, rng)
             X128 = apply_noise(X128_base, sigma, dist, clamp, rng)
@@ -194,16 +225,16 @@ def run_robustness_suite(
 
         elif kind == "label_delay":
             frac = float(v.get("fraction", 0.1))
-            policy = str(v.get("policy", "treat_as_unknown"))
-            y2, meta = apply_label_delay(y_base, frac, policy, rng)
-            batches = [VariantBatch(name=name, X7=X7_base, X128=X128_base, y=y2, meta=meta)]
+            policy = _as_label_policy(str(v.get("policy", "treat_as_unknown")))
+            y2, meta_delay = apply_label_delay(y_base, frac, policy, rng)
+            batches = [VariantBatch(name=name, X7=X7_base, X128=X128_base, y=y2, meta=meta_delay)]
 
         elif kind == "compose":
             steps = v.get("steps", [])
             X7 = X7_base.copy()
             X128 = X128_base.copy()
             y = y_base.copy()
-            meta: dict[str, Any] = {"compose": steps}
+            meta_compose: dict[str, Any] = {"compose": steps}
 
             for step in steps:
                 sk = str(step["kind"])
@@ -211,29 +242,29 @@ def run_robustness_suite(
                     X7 = apply_missingness(
                         X7,
                         float(step["rate"]),
-                        str(step.get("strategy", "mcar")),
-                        str(step.get("fill", "zero")),
+                        _as_missing_strategy(str(step.get("strategy", "mcar"))),
+                        _as_missing_fill(str(step.get("fill", "zero"))),
                         rng,
                     )
                     X128 = apply_missingness(
                         X128,
                         float(step["rate"]),
-                        str(step.get("strategy", "mcar")),
-                        str(step.get("fill", "zero")),
+                        _as_missing_strategy(str(step.get("strategy", "mcar"))),
+                        _as_missing_fill(str(step.get("fill", "zero"))),
                         rng,
                     )
                 elif sk == "noise":
                     X7 = apply_noise(
                         X7,
                         float(step["sigma"]),
-                        str(step.get("distribution", "gaussian")),
+                        _as_noise_distribution(str(step.get("distribution", "gaussian"))),
                         bool(step.get("clamp", True)),
                         rng,
                     )
                     X128 = apply_noise(
                         X128,
                         float(step["sigma"]),
-                        str(step.get("distribution", "gaussian")),
+                        _as_noise_distribution(str(step.get("distribution", "gaussian"))),
                         bool(step.get("clamp", True)),
                         rng,
                     )
@@ -241,13 +272,13 @@ def run_robustness_suite(
                     y, _m = apply_label_delay(
                         y,
                         float(step.get("fraction", 0.1)),
-                        str(step.get("policy", "treat_as_unknown")),
+                        _as_label_policy(str(step.get("policy", "treat_as_unknown"))),
                         rng,
                     )
                 else:
                     raise ValueError(f"Unknown compose step kind: {sk}")
 
-            batches = [VariantBatch(name=name, X7=X7, X128=X128, y=y, meta=meta)]
+            batches = [VariantBatch(name=name, X7=X7, X128=X128, y=y, meta=meta_compose)]
 
         else:
             raise ValueError(f"Unknown robustness variant kind: {kind}")
