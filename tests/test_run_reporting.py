@@ -34,6 +34,7 @@ def test_build_run_manifest_minimal() -> None:
         contract_meta={"counts": {"train": 1}, "label_pos_rate": {"train": 0.1}},
         mode="quick",
         seeds={"python": 42, "numpy": 42, "torch": 42, "iforest": 42},
+        robustness={"enabled": True, "variants": ["baseline"]},
     )
     assert manifest["run_id"] == "20260131T141500Z"
     assert manifest["schema_hash"] == "schema123"

@@ -23,6 +23,7 @@ from architecture_b_iforest.preprocess import Preprocessor
 from architecture_b_iforest.train import train_iforest_from_arrays
 from data.contract_export import export_frozen_contract_to_dir
 from evaluation.metrics import classification_metrics
+from evaluation.robustness import run_robustness_suite
 from runs.reporting import (
     build_run_manifest,
     dump_yaml,
@@ -65,6 +66,7 @@ def _snapshot_configs(
     eval_config: str,
     out_dir: str,
     quick: bool,
+    robustness_config: str | None = None,
 ) -> dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -74,6 +76,8 @@ def _snapshot_configs(
         "ppo.yaml": load_yaml(ppo_config),
         "eval.yaml": load_yaml(eval_config),
     }
+    if robustness_config:
+        cfgs["robustness.yaml"] = load_yaml(robustness_config)
 
     if quick:
         data_cfg = cfgs["data.yaml"]
@@ -106,6 +110,7 @@ def _snapshot_configs(
         "iforest": paths["iforest.yaml"],
         "ppo": paths["ppo.yaml"],
         "eval": paths["eval.yaml"],
+        "robustness": paths.get("robustness.yaml"),
     }
 
 
@@ -216,6 +221,7 @@ def main(
     iforest_config: str = "configs/iforest.yaml",
     ppo_config: str = "configs/ppo.yaml",
     eval_config: str = "configs/eval.yaml",
+    robustness_config: str | None = None,
     out_root: str = "reports/runs",
     quick: bool = False,
     overwrite: bool = False,
@@ -244,6 +250,7 @@ def main(
         eval_config=eval_config,
         out_dir=config_dir,
         quick=quick,
+        robustness_config=robustness_config,
     )
 
     ppo_cfg = load_yaml(config_paths["ppo"])
@@ -278,6 +285,28 @@ def main(
         out_dir=eval_dir,
     )
 
+    robustness_hash = None
+    robustness_variants: list[str] = []
+    robustness_enabled = False
+    if config_paths.get("robustness"):
+        robustness_cfg = load_yaml(config_paths["robustness"])
+        rcfg = robustness_cfg.get("robustness", {})
+        robustness_enabled = bool(rcfg.get("enabled", True))
+        robustness_variants = [str(v.get("name", "")) for v in rcfg.get("variants", [])]
+        robustness_hash = file_sha256(config_paths["robustness"])
+
+        if robustness_enabled:
+            robustness_dir = os.path.join(eval_dir, "robustness")
+            run_robustness_suite(
+                contract_dir=contract_dir,
+                iforest_model_dir=iforest_dir,
+                ppo_model_dir=ppo_dir,
+                ppo_config=config_paths["ppo"],
+                robustness_cfg_path=config_paths["robustness"],
+                out_dir=robustness_dir,
+                quick=quick,
+            )
+
     schema_hash_path = os.path.join(contract_dir, "schema_hash.txt")
     with open(schema_hash_path, "r") as f:
         schema_hash = f.read().strip()
@@ -292,12 +321,16 @@ def main(
         "ppo": file_sha256(config_paths["ppo"]),
         "eval": file_sha256(config_paths["eval"]),
     }
+    if config_paths.get("robustness"):
+        config_hashes["robustness"] = file_sha256(config_paths["robustness"])
     config_snapshot = {
         "data": os.path.relpath(config_paths["data"], run_root),
         "iforest": os.path.relpath(config_paths["iforest"], run_root),
         "ppo": os.path.relpath(config_paths["ppo"], run_root),
         "eval": os.path.relpath(config_paths["eval"], run_root),
     }
+    if config_paths.get("robustness"):
+        config_snapshot["robustness"] = os.path.relpath(config_paths["robustness"], run_root)
 
     poetry_lock_hash = None
     lock_path = os.path.join(os.getcwd(), "poetry.lock")
@@ -323,6 +356,11 @@ def main(
             "numpy": seed_value,
             "torch": seed_value,
             "iforest": iforest_seed,
+        },
+        robustness={
+            "enabled": robustness_enabled,
+            "config_sha256": robustness_hash,
+            "variants": robustness_variants,
         },
     )
     write_run_manifest(os.path.join(report_dir, "run_manifest.json"), manifest)
