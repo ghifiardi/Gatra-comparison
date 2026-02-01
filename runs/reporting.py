@@ -49,6 +49,7 @@ def build_run_manifest(
     contract_meta: dict[str, Any],
     mode: str,
     seeds: dict[str, int],
+    robustness: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
     labels = data_cfg.get("labels", {})
@@ -82,6 +83,7 @@ def build_run_manifest(
             "python_version": sys.version.split()[0],
             "platform": platform.platform(),
         },
+        "robustness": robustness or {},
     }
     return manifest
 
