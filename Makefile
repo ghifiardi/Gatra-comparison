@@ -1,6 +1,6 @@
 PY ?= python3.11
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick
 
 format:
 	@$(PY) -m ruff format .
@@ -58,6 +58,36 @@ run_robust:
 	  --eval-config configs/eval.yaml \
 	  --robustness-config configs/robustness.yaml \
 	  --out-root reports/runs
+
+train_morl:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --morl-config configs/morl.yaml \
+	  --out-root reports/runs
+
+# MORL evaluation is integrated into runs.cli when --morl-config is provided.
+eval_morl:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --morl-config configs/morl.yaml \
+	  --out-root reports/runs \
+	  --quick
+
+run_morl_quick:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --morl-config configs/morl.yaml \
+	  --out-root reports/runs \
+	  --quick
 
 dev:
 	@$(PY) -m pip install -U pip
