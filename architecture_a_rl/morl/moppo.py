@@ -114,7 +114,9 @@ def _build_rollout(
     rewards_vec = torch.tensor(rewards_vec_np, dtype=torch.float32)
 
     dones = torch.ones((x_train.shape[0],), dtype=torch.float32)
-    adv_vec, returns_vec = _vector_gae(rewards_vec, values, dones, gamma=gamma, gae_lambda=gae_lambda)
+    adv_vec, returns_vec = _vector_gae(
+        rewards_vec, values, dones, gamma=gamma, gae_lambda=gae_lambda
+    )
 
     adv_scalar = torch.sum(adv_vec * weights_t, dim=1)
     adv_scalar = (adv_scalar - adv_scalar.mean()) / (adv_scalar.std() + 1e-8)
@@ -155,7 +157,9 @@ def _update_batch(
 
     optim.zero_grad(set_to_none=True)
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(list(actor.parameters()) + list(critic.parameters()), max_norm=0.5)
+    torch.nn.utils.clip_grad_norm_(
+        list(actor.parameters()) + list(critic.parameters()), max_norm=0.5
+    )
     optim.step()
 
     return {

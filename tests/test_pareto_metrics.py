@@ -7,9 +7,18 @@ from evaluation.pareto import hypervolume_3d, hypervolume_from_rows, pareto_filt
 
 def test_pareto_filter_drops_dominated_point() -> None:
     rows = [
-        {"weights": [0.7, 0.2, 0.1], "metrics": {"pr_auc": 0.80, "f1": 0.70, "alerts_per_1k": 100.0}},
-        {"weights": [0.6, 0.3, 0.1], "metrics": {"pr_auc": 0.70, "f1": 0.60, "alerts_per_1k": 200.0}},
-        {"weights": [0.4, 0.4, 0.2], "metrics": {"pr_auc": 0.75, "f1": 0.80, "alerts_per_1k": 300.0}},
+        {
+            "weights": [0.7, 0.2, 0.1],
+            "metrics": {"pr_auc": 0.80, "f1": 0.70, "alerts_per_1k": 100.0},
+        },
+        {
+            "weights": [0.6, 0.3, 0.1],
+            "metrics": {"pr_auc": 0.70, "f1": 0.60, "alerts_per_1k": 200.0},
+        },
+        {
+            "weights": [0.4, 0.4, 0.2],
+            "metrics": {"pr_auc": 0.75, "f1": 0.80, "alerts_per_1k": 300.0},
+        },
     ]
 
     out = pareto_filter(rows, ["pr_auc", "f1", "alerts_per_1k"])

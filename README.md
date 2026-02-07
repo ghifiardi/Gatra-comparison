@@ -16,6 +16,17 @@ make eval
 make serve
 ```
 
+## MORL (v0.5)
+
+Run the multi-objective PPO pipeline (contract-only):
+
+```bash
+make run_morl_quick
+```
+
+Detailed MORL usage and policy-selection guidance:
+- `docs/morl.md`
+
 By default, uses a toy dataset generator (configs/data.yaml: dataset.source=toy).
 Replace data loader in data/loaders.py to read parquet/csv/bq.
 
