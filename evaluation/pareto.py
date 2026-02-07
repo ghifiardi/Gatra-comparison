@@ -17,6 +17,24 @@ def _utility(metric_name: str, value: float) -> float:
     return value
 
 
+def _to_float(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        return float(value)
+    raise TypeError(f"Expected numeric value, got {type(value).__name__}")
+
+
+def _metrics_from_row(row: dict[str, object]) -> dict[str, float]:
+    raw = row.get("metrics")
+    if not isinstance(raw, dict):
+        raise ValueError("Each row must include a metrics mapping")
+    out: dict[str, float] = {}
+    for key, value in raw.items():
+        out[str(key)] = _to_float(value)
+    return out
+
+
 def primary_metric_vector(
     metrics: dict[str, float],
     primary_metrics: Sequence[str],
@@ -53,13 +71,7 @@ def pareto_filter(
     if not rows:
         return []
     points = np.stack(
-        [
-            primary_metric_vector(
-                {k: float(v) for k, v in dict(row["metrics"]).items()},
-                primary_metrics,
-            )
-            for row in rows
-        ],
+        [primary_metric_vector(_metrics_from_row(row), primary_metrics) for row in rows],
         axis=0,
     )
     idx = set(pareto_indices(points))
@@ -101,13 +113,7 @@ def hypervolume_from_rows(
     if len(primary_metrics) != 3:
         raise ValueError("hypervolume currently supports exactly 3 primary metrics")
     points = np.stack(
-        [
-            primary_metric_vector(
-                {k: float(v) for k, v in dict(row["metrics"]).items()},
-                primary_metrics,
-            )
-            for row in rows
-        ],
+        [primary_metric_vector(_metrics_from_row(row), primary_metrics) for row in rows],
         axis=0,
     )
     ref_raw = np.asarray(reference, dtype=np.float64)

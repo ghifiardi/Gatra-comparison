@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from numpy.typing import NDArray
 
@@ -47,4 +48,4 @@ class MORLRollout:
     returns_vec: torch.Tensor
 
 
-Float32Array = NDArray["float32"]
+Float32Array = NDArray[np.float32]

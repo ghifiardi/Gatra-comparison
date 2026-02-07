@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import numpy as np
+from typing import cast
 
 from evaluation.pareto import hypervolume_3d, hypervolume_from_rows, pareto_filter
 
 
 def test_pareto_filter_drops_dominated_point() -> None:
-    rows = [
+    rows: list[dict[str, object]] = [
         {
             "weights": [0.7, 0.2, 0.1],
             "metrics": {"pr_auc": 0.80, "f1": 0.70, "alerts_per_1k": 100.0},
@@ -22,7 +23,7 @@ def test_pareto_filter_drops_dominated_point() -> None:
     ]
 
     out = pareto_filter(rows, ["pr_auc", "f1", "alerts_per_1k"])
-    weights = {tuple(r["weights"]) for r in out}
+    weights: set[tuple[float, ...]] = {tuple(cast(list[float], r["weights"])) for r in out}
 
     assert (0.6, 0.3, 0.1) not in weights
     assert (0.7, 0.2, 0.1) in weights
@@ -41,7 +42,7 @@ def test_hypervolume_is_deterministic() -> None:
     hv = hypervolume_3d(points, ref)
     assert hv == 12.0
 
-    rows = [
+    rows: list[dict[str, object]] = [
         {"weights": [0.5, 0.3, 0.2], "metrics": {"pr_auc": 1.0, "f1": 1.0, "alerts_per_1k": 5.0}},
         {"weights": [0.7, 0.2, 0.1], "metrics": {"pr_auc": 2.0, "f1": 1.0, "alerts_per_1k": 4.0}},
     ]

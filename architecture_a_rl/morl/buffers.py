@@ -4,6 +4,7 @@ from typing import Iterator
 
 import numpy as np
 import torch
+from numpy.typing import NDArray
 
 from .types import MORLRollout
 
@@ -18,7 +19,9 @@ def concat_state_pref(states: torch.Tensor, weights: torch.Tensor) -> torch.Tens
     return torch.cat([states, weights], dim=1)
 
 
-def iter_minibatches(n: int, batch_size: int, rng: np.random.Generator) -> Iterator[np.ndarray]:
+def iter_minibatches(
+    n: int, batch_size: int, rng: np.random.Generator
+) -> Iterator[NDArray[np.int_]]:
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
     idx = np.arange(n)
@@ -27,7 +30,7 @@ def iter_minibatches(n: int, batch_size: int, rng: np.random.Generator) -> Itera
         yield idx[i : i + batch_size]
 
 
-def select_rollout(rollout: MORLRollout, idx: np.ndarray) -> MORLRollout:
+def select_rollout(rollout: MORLRollout, idx: NDArray[np.int_]) -> MORLRollout:
     t = torch.from_numpy(idx).long()
     return MORLRollout(
         inputs=rollout.inputs[t],

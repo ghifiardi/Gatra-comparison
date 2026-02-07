@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal, Sequence, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -21,22 +21,31 @@ class ObjectiveSpec:
     per_alert_penalty: float = 0.0
 
 
+def _to_float(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        return float(value)
+    raise TypeError(f"Expected numeric value, got {type(value).__name__}")
+
+
 def parse_objectives(raw: Sequence[dict[str, object]]) -> list[ObjectiveSpec]:
     specs: list[ObjectiveSpec] = []
     for obj in raw:
         obj_type = str(obj.get("type", "")).strip()
         if obj_type not in {"classification", "fp_penalty", "per_alert_cost"}:
             raise ValueError(f"Unsupported objective type: {obj_type}")
+        objective_type = cast(ObjectiveType, obj_type)
         specs.append(
             ObjectiveSpec(
                 name=str(obj.get("name", obj_type)),
-                type=obj_type,
-                tp=float(obj.get("tp", 0.0)),
-                fn=float(obj.get("fn", 0.0)),
-                fp=float(obj.get("fp", 0.0)),
-                tn=float(obj.get("tn", 0.0)),
-                fp_penalty=float(obj.get("fp_penalty", 0.0)),
-                per_alert_penalty=float(obj.get("per_alert_penalty", 0.0)),
+                type=objective_type,
+                tp=_to_float(obj.get("tp", 0.0)),
+                fn=_to_float(obj.get("fn", 0.0)),
+                fp=_to_float(obj.get("fp", 0.0)),
+                tn=_to_float(obj.get("tn", 0.0)),
+                fp_penalty=_to_float(obj.get("fp_penalty", 0.0)),
+                per_alert_penalty=_to_float(obj.get("per_alert_penalty", 0.0)),
             )
         )
     return specs
