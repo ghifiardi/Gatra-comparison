@@ -38,6 +38,14 @@ def _safe_metric_value(v: float) -> float:
     return float(v) if np.isfinite(v) else 0.0
 
 
+def _to_float(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        return float(value)
+    raise TypeError(f"Expected numeric value, got {type(value).__name__}")
+
+
 def _write_csv(path: str, rows: list[dict[str, Any]], objective_names: list[str]) -> None:
     cols = [
         "weights",
@@ -92,15 +100,15 @@ def _write_markdown(
         kind = str(spec.get("type", "unknown"))
         if kind == "classification":
             details = (
-                f"tp={float(spec.get('tp', 0.0))}, "
-                f"fn={float(spec.get('fn', 0.0))}, "
-                f"fp={float(spec.get('fp', 0.0))}, "
-                f"tn={float(spec.get('tn', 0.0))}"
+                f"tp={_to_float(spec.get('tp', 0.0))}, "
+                f"fn={_to_float(spec.get('fn', 0.0))}, "
+                f"fp={_to_float(spec.get('fp', 0.0))}, "
+                f"tn={_to_float(spec.get('tn', 0.0))}"
             )
         elif kind == "fp_penalty":
-            details = f"fp_penalty={float(spec.get('fp_penalty', 0.0))}"
+            details = f"fp_penalty={_to_float(spec.get('fp_penalty', 0.0))}"
         elif kind == "per_alert_cost":
-            details = f"per_alert_penalty={float(spec.get('per_alert_penalty', 0.0))}"
+            details = f"per_alert_penalty={_to_float(spec.get('per_alert_penalty', 0.0))}"
         else:
             details = "n/a"
         lines.append(f"- `{name}` ({kind}): {details}")
