@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from runs.cli import main as run_main
 
 
@@ -50,7 +49,6 @@ features:
 
 
 def test_run_cli_quick_smoke(tmp_path: Path) -> None:
-    pytest.importorskip("pyarrow")
     data_cfg = tmp_path / "data.yaml"
     _write_data_config(data_cfg)
 
@@ -70,6 +68,9 @@ def test_run_cli_quick_smoke(tmp_path: Path) -> None:
 
     run_dir = out_root / run_id
     assert (run_dir / "contract" / "features_v7_train.npy").exists()
+    assert (run_dir / "contract" / "timestamps_epoch_s_train.npy").exists()
+    assert (run_dir / "contract" / "timestamps_epoch_s_val.npy").exists()
+    assert (run_dir / "contract" / "timestamps_epoch_s_test.npy").exists()
     assert (run_dir / "models" / "iforest" / "model.joblib").exists()
     assert (run_dir / "models" / "ppo" / "actor.pt").exists()
     assert (run_dir / "eval" / "metrics.json").exists()

@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from architecture_a_rl.train import train_ppo_from_arrays
 from architecture_b_iforest.train import train_iforest_from_arrays
@@ -138,7 +137,6 @@ robustness:
 
 
 def test_robustness_suite_smoke(tmp_path: Path) -> None:
-    pytest.importorskip("pyarrow")
     data_cfg = tmp_path / "data.yaml"
     iforest_cfg = tmp_path / "iforest.yaml"
     ppo_cfg = tmp_path / "ppo.yaml"

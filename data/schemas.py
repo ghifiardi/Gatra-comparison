@@ -18,6 +18,14 @@ class RawEvent(BaseModel):
     bytes_received: Optional[float] = None
     user_id: Optional[str] = None
     host_id: Optional[str] = None
+    # Optional traceability fields (useful for CSV / raw exports)
+    row_key: Optional[str] = None
+    event_timestamp_epoch_s: Optional[int] = None
+    session_id: Optional[str] = None
+    user: Optional[str] = None
+    action: Optional[str] = None
+    page: Optional[str] = None
+    details: Optional[str] = None
 
 
 class Label(BaseModel):

@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, cast
 
 import numpy as np
@@ -42,6 +42,9 @@ class ContractPaths:
     labels_val_parquet: str | None = None
     events_test_parquet: str | None = None
     labels_test_parquet: str | None = None
+    timestamps_train_npy: str | None = None
+    timestamps_val_npy: str | None = None
+    timestamps_test_npy: str | None = None
 
 
 def _contract_id() -> str:
@@ -99,6 +102,15 @@ def _stack_v128(events: list[Any]) -> NDArray[np.float32]:
     )
 
 
+def _epoch_s(e: Any) -> int:
+    # Prefer raw epoch seconds if the loader provided it (CSV mode).
+    raw = getattr(e, "event_timestamp_epoch_s", None)
+    if raw is not None:
+        return int(raw)
+    # Treat naive datetimes as UTC for stable export.
+    return int(e.ts.replace(tzinfo=timezone.utc).timestamp())
+
+
 def export_frozen_contract_to_dir(
     data_cfg_path: str,
     out_dir: str,
@@ -124,8 +136,22 @@ def export_frozen_contract_to_dir(
     X7_test = _stack_v7(test_kept)
     X128_test = _stack_v128(test_kept)
 
+    ts_train = np.array([_epoch_s(e) for e in train_kept], dtype=np.int64)
+    ts_val = np.array([_epoch_s(e) for e in val_kept], dtype=np.int64)
+    ts_test = np.array([_epoch_s(e) for e in test_kept], dtype=np.int64)
+
     def _df(items: list[Any]) -> pd.DataFrame:
         return pd.DataFrame([item.model_dump() for item in items])
+
+    def _write_tabular(df: pd.DataFrame, parquet_path: str) -> str:
+        try:
+            df.to_parquet(parquet_path, index=False)
+            return parquet_path
+        except ImportError:
+            # Keep contract generation usable without optional parquet engines.
+            csv_path = os.path.splitext(parquet_path)[0] + ".csv"
+            df.to_csv(csv_path, index=False)
+            return csv_path
 
     events_train_parquet = os.path.join(out_dir, "events_train.parquet")
     labels_train_parquet = os.path.join(out_dir, "labels_train.parquet")
@@ -135,13 +161,13 @@ def export_frozen_contract_to_dir(
     labels_test_parquet = os.path.join(out_dir, "labels_test.parquet")
 
     if include_splits:
-        _df(train_kept).to_parquet(events_train_parquet, index=False)
-        _df(train_labels_kept).to_parquet(labels_train_parquet, index=False)
-        _df(val_kept).to_parquet(events_val_parquet, index=False)
-        _df(val_labels_kept).to_parquet(labels_val_parquet, index=False)
+        events_train_parquet = _write_tabular(_df(train_kept), events_train_parquet)
+        labels_train_parquet = _write_tabular(_df(train_labels_kept), labels_train_parquet)
+        events_val_parquet = _write_tabular(_df(val_kept), events_val_parquet)
+        labels_val_parquet = _write_tabular(_df(val_labels_kept), labels_val_parquet)
 
-    _df(test_kept).to_parquet(events_test_parquet, index=False)
-    _df(test_labels_kept).to_parquet(labels_test_parquet, index=False)
+    events_test_parquet = _write_tabular(_df(test_kept), events_test_parquet)
+    labels_test_parquet = _write_tabular(_df(test_labels_kept), labels_test_parquet)
 
     v7_train_npy = os.path.join(out_dir, "features_v7_train.npy")
     v128_train_npy = os.path.join(out_dir, "features_v128_train.npy")
@@ -152,6 +178,9 @@ def export_frozen_contract_to_dir(
     v7_test_npy = os.path.join(out_dir, "features_v7_test.npy")
     v128_test_npy = os.path.join(out_dir, "features_v128_test.npy")
     y_true_npy = os.path.join(out_dir, "y_true.npy")
+    timestamps_train_npy = os.path.join(out_dir, "timestamps_epoch_s_train.npy")
+    timestamps_val_npy = os.path.join(out_dir, "timestamps_epoch_s_val.npy")
+    timestamps_test_npy = os.path.join(out_dir, "timestamps_epoch_s_test.npy")
 
     np.save(v7_train_npy, X7_train)
     np.save(v128_train_npy, X128_train)
@@ -162,6 +191,9 @@ def export_frozen_contract_to_dir(
     np.save(v7_test_npy, X7_test)
     np.save(v128_test_npy, X128_test)
     np.save(y_true_npy, y_test)
+    np.save(timestamps_train_npy, ts_train)
+    np.save(timestamps_val_npy, ts_val)
+    np.save(timestamps_test_npy, ts_test)
 
     # Backward-compatible test names
     v7_npy = os.path.join(out_dir, "features_v7.npy")
@@ -223,6 +255,9 @@ def export_frozen_contract_to_dir(
         labels_val_parquet=labels_val_parquet if include_splits else None,
         events_test_parquet=events_test_parquet,
         labels_test_parquet=labels_test_parquet,
+        timestamps_train_npy=timestamps_train_npy,
+        timestamps_val_npy=timestamps_val_npy,
+        timestamps_test_npy=timestamps_test_npy,
     )
 
 
