@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import combinations
+import math
 from typing import Sequence
 
 import numpy as np
@@ -8,6 +9,8 @@ from numpy.typing import NDArray
 
 
 def _utility(metric_name: str, value: float) -> float:
+    if not math.isfinite(value):
+        return float("-inf")
     # Convert minimized metrics into maximize-utility axes.
     if metric_name == "alerts_per_1k":
         return -value
