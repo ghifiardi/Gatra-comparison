@@ -17,12 +17,14 @@ from numpy.typing import NDArray
 from sklearn.metrics import confusion_matrix
 
 from architecture_a_rl.networks import Actor
+from architecture_a_rl.morl.moppo import load_weight_grid_from_config, train_moppo_from_arrays
 from architecture_a_rl.train import train_ppo_from_arrays
 from architecture_b_iforest.model import IForestModel
 from architecture_b_iforest.preprocess import Preprocessor
 from architecture_b_iforest.train import train_iforest_from_arrays
 from data.contract_export import export_frozen_contract_to_dir
 from evaluation.metrics import classification_metrics
+from evaluation.morl_report import run_morl_weight_sweep
 from evaluation.robustness import run_robustness_suite
 from runs.reporting import (
     build_run_manifest,
@@ -67,6 +69,7 @@ def _snapshot_configs(
     out_dir: str,
     quick: bool,
     robustness_config: str | None = None,
+    morl_config: str | None = None,
 ) -> dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -78,6 +81,8 @@ def _snapshot_configs(
     }
     if robustness_config:
         cfgs["robustness.yaml"] = load_yaml(robustness_config)
+    if morl_config:
+        cfgs["morl.yaml"] = load_yaml(morl_config)
 
     if quick:
         data_cfg = cfgs["data.yaml"]
@@ -99,6 +104,12 @@ def _snapshot_configs(
             32, int(ppo_cfg.get("train", {}).get("batch_size", 64))
         )
 
+        if "morl.yaml" in cfgs:
+            morl_cfg = cfgs["morl.yaml"].setdefault("morl", {})
+            train_cfg = morl_cfg.setdefault("training", {})
+            train_cfg["epochs"] = min(1, int(train_cfg.get("epochs", 5)))
+            train_cfg["batch_size"] = min(64, int(train_cfg.get("batch_size", 256)))
+
     paths: dict[str, str] = {}
     for name, payload in cfgs.items():
         dest = os.path.join(out_dir, name)
@@ -111,6 +122,7 @@ def _snapshot_configs(
         "ppo": paths["ppo.yaml"],
         "eval": paths["eval.yaml"],
         "robustness": paths.get("robustness.yaml"),
+        "morl": paths.get("morl.yaml"),
     }
 
 
@@ -222,6 +234,7 @@ def main(
     ppo_config: str = "configs/ppo.yaml",
     eval_config: str = "configs/eval.yaml",
     robustness_config: str | None = None,
+    morl_config: str | None = None,
     out_root: str = "reports/runs",
     quick: bool = False,
     overwrite: bool = False,
@@ -236,11 +249,12 @@ def main(
     contract_dir = os.path.join(run_root, "contract")
     iforest_dir = os.path.join(run_root, "models", "iforest")
     ppo_dir = os.path.join(run_root, "models", "ppo")
+    morl_dir = os.path.join(run_root, "models", "morl")
     eval_dir = os.path.join(run_root, "eval")
     report_dir = os.path.join(run_root, "report")
     config_dir = os.path.join(run_root, "config")
 
-    for path in (contract_dir, iforest_dir, ppo_dir, eval_dir, report_dir, config_dir):
+    for path in (contract_dir, iforest_dir, ppo_dir, morl_dir, eval_dir, report_dir, config_dir):
         os.makedirs(path, exist_ok=True)
 
     config_paths = _snapshot_configs(
@@ -251,6 +265,7 @@ def main(
         out_dir=config_dir,
         quick=quick,
         robustness_config=robustness_config,
+        morl_config=morl_config,
     )
 
     ppo_cfg = load_yaml(config_paths["ppo"])
@@ -276,6 +291,36 @@ def main(
         config_paths["ppo"], x128_train, y_train, ppo_dir, x_val=x128_val, y_val=y_val
     )
     t1_ppo = time.perf_counter()
+
+    morl_enabled = False
+    morl_hash: str | None = None
+    morl_weight_grid: list[list[float]] = []
+    t0_morl: float | None = None
+    t1_morl: float | None = None
+    if config_paths.get("morl"):
+        morl_cfg = load_yaml(config_paths["morl"])
+        morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))
+        morl_hash = file_sha256(config_paths["morl"])
+        if morl_enabled:
+            t0_morl = time.perf_counter()
+            train_moppo_from_arrays(
+                config_paths["morl"],
+                x128_train,
+                y_train,
+                morl_dir,
+                seed=seed_value,
+                x_val=x128_val,
+                y_val=y_val,
+            )
+            t1_morl = time.perf_counter()
+            grid = load_weight_grid_from_config(config_paths["morl"])
+            morl_weight_grid = [[float(v) for v in row.tolist()] for row in grid]
+            run_morl_weight_sweep(
+                contract_dir=contract_dir,
+                morl_model_dir=morl_dir,
+                morl_cfg_path=config_paths["morl"],
+                out_dir=os.path.join(eval_dir, "morl"),
+            )
 
     metrics, _, thresholds = _evaluate_from_contract(
         contract_dir=contract_dir,
@@ -323,6 +368,8 @@ def main(
     }
     if config_paths.get("robustness"):
         config_hashes["robustness"] = file_sha256(config_paths["robustness"])
+    if config_paths.get("morl"):
+        config_hashes["morl"] = file_sha256(config_paths["morl"])
     config_snapshot = {
         "data": os.path.relpath(config_paths["data"], run_root),
         "iforest": os.path.relpath(config_paths["iforest"], run_root),
@@ -331,6 +378,8 @@ def main(
     }
     if config_paths.get("robustness"):
         config_snapshot["robustness"] = os.path.relpath(config_paths["robustness"], run_root)
+    if config_paths.get("morl"):
+        config_snapshot["morl"] = os.path.relpath(config_paths["morl"], run_root)
 
     poetry_lock_hash = None
     lock_path = os.path.join(os.getcwd(), "poetry.lock")
@@ -361,6 +410,15 @@ def main(
             "enabled": robustness_enabled,
             "config_sha256": robustness_hash,
             "variants": robustness_variants,
+        },
+        morl={
+            "enabled": morl_enabled,
+            "config_sha256": morl_hash,
+            "weight_grid": morl_weight_grid,
+            "model_dir": os.path.relpath(morl_dir, run_root) if morl_enabled else None,
+            "train_seconds": (t1_morl - t0_morl)
+            if (t0_morl is not None and t1_morl is not None)
+            else None,
         },
     )
     write_run_manifest(os.path.join(report_dir, "run_manifest.json"), manifest)

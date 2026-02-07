@@ -50,6 +50,7 @@ def build_run_manifest(
     mode: str,
     seeds: dict[str, int],
     robustness: dict[str, Any] | None = None,
+    morl: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
     labels = data_cfg.get("labels", {})
@@ -84,6 +85,7 @@ def build_run_manifest(
             "platform": platform.platform(),
         },
         "robustness": robustness or {},
+        "morl": morl or {},
     }
     return manifest
 
