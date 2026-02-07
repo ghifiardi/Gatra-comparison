@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import asdict
 import json
 import os
 from typing import Any, cast
@@ -72,6 +73,7 @@ def _write_markdown(
     path: str,
     rows: list[dict[str, Any]],
     pareto_rows: list[dict[str, Any]],
+    objective_specs: list[dict[str, object]],
     primary_metrics: list[str],
     hypervolume: float | None,
 ) -> None:
@@ -84,6 +86,24 @@ def _write_markdown(
     ]
     if hypervolume is not None:
         lines.append(f"- Hypervolume: {hypervolume:.6f}")
+    lines.extend(["", "## Objectives"])
+    for spec in objective_specs:
+        name = str(spec.get("name", "unknown"))
+        kind = str(spec.get("type", "unknown"))
+        if kind == "classification":
+            details = (
+                f"tp={float(spec.get('tp', 0.0))}, "
+                f"fn={float(spec.get('fn', 0.0))}, "
+                f"fp={float(spec.get('fp', 0.0))}, "
+                f"tn={float(spec.get('tn', 0.0))}"
+            )
+        elif kind == "fp_penalty":
+            details = f"fp_penalty={float(spec.get('fp_penalty', 0.0))}"
+        elif kind == "per_alert_cost":
+            details = f"per_alert_penalty={float(spec.get('per_alert_penalty', 0.0))}"
+        else:
+            details = "n/a"
+        lines.append(f"- `{name}` ({kind}): {details}")
     lines.extend(
         [
             "",
@@ -204,6 +224,7 @@ def run_morl_weight_sweep(
         os.path.join(out_dir, "morl.md"),
         rows=rows,
         pareto_rows=pareto_rows,
+        objective_specs=[cast(dict[str, object], asdict(o)) for o in objectives],
         primary_metrics=primary_metrics,
         hypervolume=hv_value,
     )
