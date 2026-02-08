@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -123,9 +124,18 @@ splits:
     ts_train = np.load(paths.timestamps_train_npy or "")
     ts_val = np.load(paths.timestamps_val_npy or "")
     ts_test = np.load(paths.timestamps_test_npy or "")
+    session_train = np.load(paths.session_id_train_npy or "")
+    session_val = np.load(paths.session_id_val_npy or "")
+    session_test = np.load(paths.session_id_test_npy or "")
     assert ts_train.tolist() == [1735732800]
     assert ts_val.tolist() == [1735822800]
     assert ts_test.tolist() == [1735912800]
+    assert session_train.tolist() == ["s1"]
+    assert session_val.tolist() == ["s2"]
+    assert session_test.tolist() == ["s3"]
+    assert len(session_train) == len(ts_train)
+    assert len(session_val) == len(ts_val)
+    assert len(session_test) == len(ts_test)
 
     events_train_path = Path(paths.events_train_parquet or "")
     if events_train_path.suffix == ".parquet":
@@ -134,3 +144,7 @@ splits:
         events_train_df = pd.read_csv(events_train_path)
     assert "row_key" in events_train_df.columns
     assert events_train_df["row_key"].iloc[0] == "rk_train"
+
+    with open(paths.meta_json, "r") as f:
+        meta = json.load(f)
+    assert "episodes" in meta
