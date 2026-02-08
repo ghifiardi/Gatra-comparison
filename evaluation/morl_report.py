@@ -12,7 +12,8 @@ import yaml
 from numpy.typing import NDArray
 
 from architecture_a_rl.morl.networks import PreferenceConditionedActor
-from architecture_a_rl.morl.objectives import compute_reward_matrix, parse_objectives
+from architecture_a_rl.morl.objectives import parse_objectives
+from architecture_a_rl.morl.objectives_realdata import compute_reward_matrix_realdata_aware
 from architecture_a_rl.morl.preferences import normalize_weight_grid
 from evaluation.metrics import classification_metrics
 from evaluation.pareto import hypervolume_from_rows, pareto_filter
@@ -88,6 +89,8 @@ def _write_markdown(
     primary_metrics: list[str],
     hypervolume: float | None,
     split: str,
+    objective_source: str,
+    level1_stats: dict[str, float],
 ) -> None:
     lines = [
         "# MORL Evaluation Summary",
@@ -96,6 +99,7 @@ def _write_markdown(
         f"- Evaluated weights: {len(rows)}",
         f"- Pareto candidates: {len(pareto_rows)}",
         f"- Primary metrics: {', '.join(primary_metrics)}",
+        f"- Objective source: {objective_source}",
     ]
     if hypervolume is not None:
         lines.append(f"- Hypervolume: {hypervolume:.6f}")
@@ -117,6 +121,26 @@ def _write_markdown(
         else:
             details = "n/a"
         lines.append(f"- `{name}` ({kind}): {details}")
+    if objective_source == "level1_realdata":
+        lines.extend(
+            [
+                "",
+                "## Level-1 objective definitions",
+                "- `time_to_triage_seconds`: per-session max(timestamp)-min(timestamp); minimized in reward.",
+                "- `detection_coverage`: novelty of `(page, action)` interactions within session; maximized in reward.",
+            ]
+        )
+        if level1_stats:
+            lines.extend(
+                [
+                    "",
+                    "## Level-1 summary stats",
+                    f"- median_ttt_seconds: {level1_stats.get('ttt_median_seconds', 0.0):.3f}",
+                    f"- p90_ttt_seconds: {level1_stats.get('ttt_p90_seconds', 0.0):.3f}",
+                    f"- coverage_novelty_rate: {level1_stats.get('coverage_novelty_rate', 0.0):.6f}",
+                    f"- coverage_per_1k_events: {level1_stats.get('coverage_per_1k_events', 0.0):.3f}",
+                ]
+            )
     lines.extend(
         [
             "",
@@ -176,6 +200,8 @@ def evaluate_morl_weight_on_split(
 
     train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
     hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
+    realdata_cfg = cast(dict[str, Any], morl_cfg.get("realdata_objectives", {}))
+    realdata_normalization = str(realdata_cfg.get("normalization", "minmax"))
     actor, seed = _load_actor(morl_model_dir=morl_model_dir, hidden=hidden, k_objectives=k)
 
     x_split, y_split = _load_contract_split(contract_dir, split)
@@ -200,7 +226,15 @@ def evaluate_morl_weight_on_split(
         "alerts_per_1k": float(1000.0 * np.mean(actions == 1)),
     }
     objective_names = [o.name for o in objectives]
-    reward_matrix = compute_reward_matrix(y_split, actions, objectives)
+    reward_result = compute_reward_matrix_realdata_aware(
+        y_true=y_split,
+        actions=actions,
+        objectives=objectives,
+        contract_dir=contract_dir,
+        split=split,
+        normalization=realdata_normalization,
+    )
+    reward_matrix = reward_result.reward_matrix
     objective_means = {objective_names[i]: float(np.mean(reward_matrix[:, i])) for i in range(k)}
 
     row = {
@@ -208,7 +242,11 @@ def evaluate_morl_weight_on_split(
         "weights": [float(v) for v in w_arr.tolist()],
         "metrics": metrics,
         "objective_means": objective_means,
-        "meta": {"seed": seed},
+        "meta": {
+            "seed": seed,
+            "objective_source": reward_result.source,
+            "level1_stats": reward_result.stats,
+        },
     }
     return row
 
@@ -260,10 +298,21 @@ def run_morl_weight_sweep(
         reference = cast(list[float], hv_cfg.get("reference", [0.0, 0.0, 1000.0]))
         hv_value = hypervolume_from_rows(rows, primary_metrics, reference)
 
+    objective_source = "fallback_synthetic"
+    level1_stats: dict[str, float] = {}
+    if rows:
+        first_meta = cast(dict[str, Any], rows[0].get("meta", {}))
+        objective_source = str(first_meta.get("objective_source", "fallback_synthetic"))
+        stats_raw = first_meta.get("level1_stats", {})
+        if isinstance(stats_raw, dict):
+            level1_stats = {str(k): float(v) for k, v in stats_raw.items()}
+
     payload = {
         "split": split,
         "k_objectives": k,
         "objective_names": [o.name for o in objectives],
+        "objective_source": objective_source,
+        "level1_stats": level1_stats,
         "primary_metrics": primary_metrics,
         "results": rows,
         "pareto": pareto_rows,
@@ -287,6 +336,8 @@ def run_morl_weight_sweep(
         primary_metrics=primary_metrics,
         hypervolume=hv_value,
         split=split,
+        objective_source=objective_source,
+        level1_stats=level1_stats,
     )
 
     if hv_value is not None:
@@ -308,6 +359,8 @@ def run_morl_weight_sweep(
             primary_metrics=primary_metrics,
             hypervolume=hv_value,
             split=split,
+            objective_source=objective_source,
+            level1_stats=level1_stats,
         )
         if hv_value is not None:
             with open(os.path.join(out_dir, "hypervolume.json"), "w") as f:

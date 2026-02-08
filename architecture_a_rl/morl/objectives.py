@@ -6,7 +6,13 @@ from typing import Literal, Sequence, cast
 import numpy as np
 from numpy.typing import NDArray
 
-ObjectiveType = Literal["classification", "fp_penalty", "per_alert_cost"]
+ObjectiveType = Literal[
+    "classification",
+    "fp_penalty",
+    "per_alert_cost",
+    "time_to_triage_seconds",
+    "detection_coverage",
+]
 
 
 @dataclass(frozen=True)
@@ -19,6 +25,19 @@ class ObjectiveSpec:
     tn: float = 0.0
     fp_penalty: float = 0.0
     per_alert_penalty: float = 0.0
+    ttt_alert_penalty: float = -1.0
+    coverage_alert_reward: float = 1.0
+
+
+def canonical_objective_type(raw_type: str) -> ObjectiveType:
+    normalized = raw_type.strip()
+    if normalized in {"time_to_triage", "time_to_triage_seconds"}:
+        return "time_to_triage_seconds"
+    if normalized in {"coverage", "detection_coverage"}:
+        return "detection_coverage"
+    if normalized in {"classification", "fp_penalty", "per_alert_cost"}:
+        return cast(ObjectiveType, normalized)
+    raise ValueError(f"Unsupported objective type: {raw_type}")
 
 
 def _to_float(value: object) -> float:
@@ -32,10 +51,8 @@ def _to_float(value: object) -> float:
 def parse_objectives(raw: Sequence[dict[str, object]]) -> list[ObjectiveSpec]:
     specs: list[ObjectiveSpec] = []
     for obj in raw:
-        obj_type = str(obj.get("type", "")).strip()
-        if obj_type not in {"classification", "fp_penalty", "per_alert_cost"}:
-            raise ValueError(f"Unsupported objective type: {obj_type}")
-        objective_type = cast(ObjectiveType, obj_type)
+        objective_type = canonical_objective_type(str(obj.get("type", "")))
+        obj_type = str(objective_type)
         specs.append(
             ObjectiveSpec(
                 name=str(obj.get("name", obj_type)),
@@ -46,6 +63,8 @@ def parse_objectives(raw: Sequence[dict[str, object]]) -> list[ObjectiveSpec]:
                 tn=_to_float(obj.get("tn", 0.0)),
                 fp_penalty=_to_float(obj.get("fp_penalty", 0.0)),
                 per_alert_penalty=_to_float(obj.get("per_alert_penalty", 0.0)),
+                ttt_alert_penalty=_to_float(obj.get("ttt_alert_penalty", -1.0)),
+                coverage_alert_reward=_to_float(obj.get("coverage_alert_reward", 1.0)),
             )
         )
     return specs
@@ -79,6 +98,12 @@ def compute_reward_vector(
             rewards.append(spec.fp_penalty if ((not is_threat) and is_alert) else 0.0)
         elif spec.type == "per_alert_cost":
             rewards.append(spec.per_alert_penalty if is_alert else 0.0)
+        elif spec.type == "time_to_triage_seconds":
+            # Synthetic fallback used when real-data episode fields are unavailable.
+            rewards.append(spec.ttt_alert_penalty if is_alert else 0.0)
+        elif spec.type == "detection_coverage":
+            # Synthetic fallback used when real-data interaction fields are unavailable.
+            rewards.append(spec.coverage_alert_reward if is_alert else 0.0)
         else:  # pragma: no cover
             raise ValueError(f"Unsupported objective type: {spec.type}")
 

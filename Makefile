@@ -1,4 +1,11 @@
 PY ?= python3.11
+DATA_CONFIG ?= configs/data.yaml
+IFOREST_CONFIG ?= configs/iforest.yaml
+PPO_CONFIG ?= configs/ppo.yaml
+EVAL_CONFIG ?= configs/eval.yaml
+MORL_CONFIG ?= configs/morl.yaml
+META_CONFIG ?= configs/meta_controller.yaml
+OUT_ROOT ?= reports/runs
 
 .PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick
 
@@ -26,19 +33,19 @@ serve:
 
 run:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --out-root reports/runs
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --out-root $(OUT_ROOT)
 
 run_quick:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --out-root reports/runs \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --out-root $(OUT_ROOT) \
 	  --quick
 
 robustness:
@@ -52,62 +59,62 @@ robustness:
 
 run_robust:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
 	  --robustness-config configs/robustness.yaml \
-	  --out-root reports/runs
+	  --out-root $(OUT_ROOT)
 
 train_morl:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --morl-config configs/morl.yaml \
-	  --out-root reports/runs
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --out-root $(OUT_ROOT)
 
 # MORL evaluation is integrated into runs.cli when --morl-config is provided.
 eval_morl:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --morl-config configs/morl.yaml \
-	  --out-root reports/runs \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --out-root $(OUT_ROOT) \
 	  --quick
 
 run_morl_quick:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --morl-config configs/morl.yaml \
-	  --out-root reports/runs \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --out-root $(OUT_ROOT) \
 	  --quick
 
 meta_select:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --morl-config configs/morl.yaml \
-	  --meta-config configs/meta_controller.yaml \
-	  --out-root reports/runs
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --meta-config $(META_CONFIG) \
+	  --out-root $(OUT_ROOT)
 
 run_meta_quick:
 	PYTHONPATH=. $(PY) -m runs.cli \
-	  --data-config configs/data.yaml \
-	  --iforest-config configs/iforest.yaml \
-	  --ppo-config configs/ppo.yaml \
-	  --eval-config configs/eval.yaml \
-	  --morl-config configs/morl.yaml \
-	  --meta-config configs/meta_controller.yaml \
-	  --out-root reports/runs \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --meta-config $(META_CONFIG) \
+	  --out-root $(OUT_ROOT) \
 	  --quick
 
 dev:

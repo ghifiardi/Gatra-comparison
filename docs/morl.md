@@ -76,6 +76,38 @@ Selection methods in `configs/meta_controller.yaml`:
 - `bandit_ucb`: deterministic seeded UCB with pseudo-noisy observations.
 - `bandit_thompson`: deterministic seeded Gaussian Thompson sampling.
 
+## Real-data objectives (v0.6)
+
+`configs/morl_realdata.yaml` adds Level-1 objectives derived from contract arrays:
+
+- `time_to_triage_seconds` (TTT): per-session `max(ts)-min(ts)` and minimized in reward.
+- `detection_coverage`: novelty of `(page, action)` within session and maximized in reward.
+
+The MORL path remains contract-only. If required split arrays are missing, training/eval
+falls back to synthetic objective behavior.
+
+Real-data quick run with local CSV export (data files are intentionally not committed):
+
+```bash
+make run_morl_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  MORL_CONFIG=configs/morl_realdata.yaml
+```
+
+Direct CLI equivalent:
+
+```bash
+PYTHONPATH=. python3.11 -m runs.cli \
+  --data-config configs/data_local_gatra_prd_c335.yaml \
+  --iforest-config configs/iforest.yaml \
+  --ppo-config configs/ppo.yaml \
+  --eval-config configs/eval.yaml \
+  --morl-config configs/morl_realdata.yaml \
+  --meta-config configs/meta_controller.yaml \
+  --out-root reports/runs \
+  --quick
+```
+
 ## Outputs
 
 For run id `<run_id>`, MORL artifacts are written to:
@@ -91,6 +123,8 @@ Key files:
 - `meta_selection.json`: selected weight + method + constraints + trace.
 - `meta_selection.md`: human-readable selection report.
 - `morl_table_test.csv` / `morl_test.md`: TEST sweep tabular/markdown summaries.
+- `../contract/objectives_{train,val,test}.npz`: per-row real-data objective signals.
+- `../contract/objectives_meta.json`: objective definitions + normalization stats.
 
 ## Interpreting Pareto and Hypervolume
 
