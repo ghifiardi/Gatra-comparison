@@ -45,6 +45,21 @@ class ContractPaths:
     timestamps_train_npy: str | None = None
     timestamps_val_npy: str | None = None
     timestamps_test_npy: str | None = None
+    session_id_train_npy: str | None = None
+    session_id_val_npy: str | None = None
+    session_id_test_npy: str | None = None
+    user_train_npy: str | None = None
+    user_val_npy: str | None = None
+    user_test_npy: str | None = None
+    action_train_npy: str | None = None
+    action_val_npy: str | None = None
+    action_test_npy: str | None = None
+    page_train_npy: str | None = None
+    page_val_npy: str | None = None
+    page_test_npy: str | None = None
+    row_key_train_npy: str | None = None
+    row_key_val_npy: str | None = None
+    row_key_test_npy: str | None = None
 
 
 def _contract_id() -> str:
@@ -111,6 +126,35 @@ def _epoch_s(e: Any) -> int:
     return int(e.ts.replace(tzinfo=timezone.utc).timestamp())
 
 
+def _string_array(values: list[str | None]) -> NDArray[np.str_]:
+    safe = [v if v is not None else "" for v in values]
+    max_len = max((len(v) for v in safe), default=1)
+    return np.asarray(safe, dtype=f"<U{max_len}")
+
+
+def _attr_array(events: list[Any], attr: str) -> NDArray[np.str_]:
+    return _string_array([cast(str | None, getattr(e, attr, None)) for e in events])
+
+
+def _assert_aligned(
+    split: str,
+    y: NDArray[np.int8],
+    timestamps: NDArray[np.int64],
+    session_ids: NDArray[np.str_],
+) -> None:
+    n = int(y.shape[0])
+    if int(timestamps.shape[0]) != n:
+        raise ValueError(
+            f"Alignment error in split '{split}': y has {n} rows but timestamps has"
+            f" {int(timestamps.shape[0])}"
+        )
+    if int(session_ids.shape[0]) != n:
+        raise ValueError(
+            f"Alignment error in split '{split}': y has {n} rows but session_id has"
+            f" {int(session_ids.shape[0])}"
+        )
+
+
 def export_frozen_contract_to_dir(
     data_cfg_path: str,
     out_dir: str,
@@ -139,6 +183,13 @@ def export_frozen_contract_to_dir(
     ts_train = np.array([_epoch_s(e) for e in train_kept], dtype=np.int64)
     ts_val = np.array([_epoch_s(e) for e in val_kept], dtype=np.int64)
     ts_test = np.array([_epoch_s(e) for e in test_kept], dtype=np.int64)
+    session_train = _attr_array(train_kept, "session_id")
+    session_val = _attr_array(val_kept, "session_id")
+    session_test = _attr_array(test_kept, "session_id")
+
+    _assert_aligned("train", y_train, ts_train, session_train)
+    _assert_aligned("val", y_val, ts_val, session_val)
+    _assert_aligned("test", y_test, ts_test, session_test)
 
     def _df(items: list[Any]) -> pd.DataFrame:
         return pd.DataFrame([item.model_dump() for item in items])
@@ -181,6 +232,21 @@ def export_frozen_contract_to_dir(
     timestamps_train_npy = os.path.join(out_dir, "timestamps_epoch_s_train.npy")
     timestamps_val_npy = os.path.join(out_dir, "timestamps_epoch_s_val.npy")
     timestamps_test_npy = os.path.join(out_dir, "timestamps_epoch_s_test.npy")
+    session_id_train_npy = os.path.join(out_dir, "session_id_train.npy")
+    session_id_val_npy = os.path.join(out_dir, "session_id_val.npy")
+    session_id_test_npy = os.path.join(out_dir, "session_id_test.npy")
+    user_train_npy = os.path.join(out_dir, "user_train.npy")
+    user_val_npy = os.path.join(out_dir, "user_val.npy")
+    user_test_npy = os.path.join(out_dir, "user_test.npy")
+    action_train_npy = os.path.join(out_dir, "action_train.npy")
+    action_val_npy = os.path.join(out_dir, "action_val.npy")
+    action_test_npy = os.path.join(out_dir, "action_test.npy")
+    page_train_npy = os.path.join(out_dir, "page_train.npy")
+    page_val_npy = os.path.join(out_dir, "page_val.npy")
+    page_test_npy = os.path.join(out_dir, "page_test.npy")
+    row_key_train_npy = os.path.join(out_dir, "row_key_train.npy")
+    row_key_val_npy = os.path.join(out_dir, "row_key_val.npy")
+    row_key_test_npy = os.path.join(out_dir, "row_key_test.npy")
 
     np.save(v7_train_npy, X7_train)
     np.save(v128_train_npy, X128_train)
@@ -194,6 +260,21 @@ def export_frozen_contract_to_dir(
     np.save(timestamps_train_npy, ts_train)
     np.save(timestamps_val_npy, ts_val)
     np.save(timestamps_test_npy, ts_test)
+    np.save(session_id_train_npy, session_train)
+    np.save(session_id_val_npy, session_val)
+    np.save(session_id_test_npy, session_test)
+    np.save(user_train_npy, _attr_array(train_kept, "user"))
+    np.save(user_val_npy, _attr_array(val_kept, "user"))
+    np.save(user_test_npy, _attr_array(test_kept, "user"))
+    np.save(action_train_npy, _attr_array(train_kept, "action"))
+    np.save(action_val_npy, _attr_array(val_kept, "action"))
+    np.save(action_test_npy, _attr_array(test_kept, "action"))
+    np.save(page_train_npy, _attr_array(train_kept, "page"))
+    np.save(page_val_npy, _attr_array(val_kept, "page"))
+    np.save(page_test_npy, _attr_array(test_kept, "page"))
+    np.save(row_key_train_npy, _attr_array(train_kept, "row_key"))
+    np.save(row_key_val_npy, _attr_array(val_kept, "row_key"))
+    np.save(row_key_test_npy, _attr_array(test_kept, "row_key"))
 
     # Backward-compatible test names
     v7_npy = os.path.join(out_dir, "features_v7.npy")
@@ -207,6 +288,7 @@ def export_frozen_contract_to_dir(
         f.write(schema_hash)
 
     cfg = _load_yaml(data_cfg_path)
+    dataset_cfg = cast(dict[str, Any], cfg.get("dataset", {}))
     meta = {
         "contract_id": contract_id or os.path.basename(out_dir),
         "git_commit": _git_commit_hash(),
@@ -226,6 +308,18 @@ def export_frozen_contract_to_dir(
         "normalization": {
             "iforest_scaler": "standard",
             "notes": "Scaler statistics stored in IF bundle",
+        },
+        "episodes": {
+            "source": os.path.basename(str(dataset_cfg.get("path", "unknown"))),
+            "keys": ["session_id", "user"],
+            "files": [
+                "session_id_train.npy",
+                "session_id_val.npy",
+                "session_id_test.npy",
+                "user_train.npy",
+                "user_val.npy",
+                "user_test.npy",
+            ],
         },
     }
     meta_json = os.path.join(out_dir, "meta.json")
@@ -258,6 +352,21 @@ def export_frozen_contract_to_dir(
         timestamps_train_npy=timestamps_train_npy,
         timestamps_val_npy=timestamps_val_npy,
         timestamps_test_npy=timestamps_test_npy,
+        session_id_train_npy=session_id_train_npy,
+        session_id_val_npy=session_id_val_npy,
+        session_id_test_npy=session_id_test_npy,
+        user_train_npy=user_train_npy,
+        user_val_npy=user_val_npy,
+        user_test_npy=user_test_npy,
+        action_train_npy=action_train_npy,
+        action_val_npy=action_val_npy,
+        action_test_npy=action_test_npy,
+        page_train_npy=page_train_npy,
+        page_val_npy=page_val_npy,
+        page_test_npy=page_test_npy,
+        row_key_train_npy=row_key_train_npy,
+        row_key_val_npy=row_key_val_npy,
+        row_key_test_npy=row_key_test_npy,
     )
 
 
