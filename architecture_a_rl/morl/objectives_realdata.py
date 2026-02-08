@@ -192,7 +192,10 @@ def _preprocess_for_norm(
     if norm_name in {"none", "zscore"}:
         return values.astype(np.float32)
     if norm_name == "log1p_zscore":
-        return np.log1p(np.maximum(values, np.float32(0.0))).astype(np.float32)
+        return cast(
+            NDArray[np.float32],
+            np.log1p(np.maximum(values, np.float32(0.0))).astype(np.float32),
+        )
     if norm_name == "rate_per_1k_zscore":
         return rate_per_1k(values, denom_events)
     raise ValueError(f"Unsupported norm: {norm_name}")

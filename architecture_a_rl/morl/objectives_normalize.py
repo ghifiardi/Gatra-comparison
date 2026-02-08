@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
+from typing import cast
 
 
 @dataclass(frozen=True)
@@ -83,4 +84,4 @@ def rate_per_1k(
     if x_counts.shape != denom_events.shape:
         raise ValueError("x_counts and denom_events must have identical shape")
     denom = np.maximum(denom_events, np.float32(1.0))
-    return (np.float32(1000.0) * x_counts / denom).astype(np.float32)
+    return cast(NDArray[np.float32], (np.float32(1000.0) * x_counts / denom).astype(np.float32))
