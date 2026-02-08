@@ -108,6 +108,36 @@ PYTHONPATH=. python3.11 -m runs.cli \
   --quick
 ```
 
+## Objective normalization controls (v0.6.1)
+
+v0.6.1 adds objective-level normalization/capping controls for real-data MORL.
+This keeps TTT (seconds) and coverage (counts/rates) on comparable scales.
+
+Baseline (unnormalized) config:
+
+```bash
+make run_morl_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  MORL_CONFIG=configs/morl_realdata.yaml
+```
+
+Normalized config:
+
+```bash
+make run_morl_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  MORL_CONFIG=configs/morl_realdata_normalized.yaml
+```
+
+Normalization behavior in `configs/morl_realdata_normalized.yaml`:
+
+- objective-level `norm` and `cap_pctl` controls
+- reference stats from `val` split only
+- same stats applied to configured splits (`val`, `test`)
+- optional persistence to `objectives_norm.json`
+
+The MORL path remains contract-only with no BigQuery runtime calls.
+
 ## Outputs
 
 For run id `<run_id>`, MORL artifacts are written to:
@@ -125,6 +155,7 @@ Key files:
 - `morl_table_test.csv` / `morl_test.md`: TEST sweep tabular/markdown summaries.
 - `../contract/objectives_{train,val,test}.npz`: per-row real-data objective signals.
 - `../contract/objectives_meta.json`: objective definitions + normalization stats.
+- `../contract/objectives_norm.json`: persisted reference normalization statistics.
 
 ## Interpreting Pareto and Hypervolume
 

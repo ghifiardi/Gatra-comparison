@@ -27,6 +27,9 @@ class ObjectiveSpec:
     per_alert_penalty: float = 0.0
     ttt_alert_penalty: float = -1.0
     coverage_alert_reward: float = 1.0
+    direction: str = "maximize"
+    norm: str = "none"
+    cap_pctl: float | None = None
 
 
 def canonical_objective_type(raw_type: str) -> ObjectiveType:
@@ -48,6 +51,12 @@ def _to_float(value: object) -> float:
     raise TypeError(f"Expected numeric value, got {type(value).__name__}")
 
 
+def _to_optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return _to_float(value)
+
+
 def parse_objectives(raw: Sequence[dict[str, object]]) -> list[ObjectiveSpec]:
     specs: list[ObjectiveSpec] = []
     for obj in raw:
@@ -65,6 +74,9 @@ def parse_objectives(raw: Sequence[dict[str, object]]) -> list[ObjectiveSpec]:
                 per_alert_penalty=_to_float(obj.get("per_alert_penalty", 0.0)),
                 ttt_alert_penalty=_to_float(obj.get("ttt_alert_penalty", -1.0)),
                 coverage_alert_reward=_to_float(obj.get("coverage_alert_reward", 1.0)),
+                direction=str(obj.get("direction", "maximize")),
+                norm=str(obj.get("norm", "none")),
+                cap_pctl=_to_optional_float(obj.get("cap_pctl")),
             )
         )
     return specs

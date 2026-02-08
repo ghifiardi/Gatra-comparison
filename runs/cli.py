@@ -386,6 +386,7 @@ def main(
 
     morl_objective_source: str | None = None
     morl_level1_stats: dict[str, float] = {}
+    morl_normalization_summary: dict[str, Any] = {}
     morl_meta_path = os.path.join(morl_dir, "morl_meta.json")
     if os.path.exists(morl_meta_path):
         with open(morl_meta_path, "r") as f:
@@ -396,6 +397,9 @@ def main(
         stats_raw = morl_meta_payload.get("realdata_objective_stats", {})
         if isinstance(stats_raw, dict):
             morl_level1_stats = {str(k): float(v) for k, v in stats_raw.items()}
+        norm_raw = morl_meta_payload.get("normalization_summary", {})
+        if isinstance(norm_raw, dict):
+            morl_normalization_summary = cast(dict[str, Any], norm_raw)
 
     metrics, _, thresholds = _evaluate_from_contract(
         contract_dir=contract_dir,
@@ -497,6 +501,7 @@ def main(
             "model_dir": os.path.relpath(morl_dir, run_root) if morl_enabled else None,
             "objective_source": morl_objective_source,
             "realdata_objective_stats": morl_level1_stats,
+            "normalization_summary": morl_normalization_summary,
             "train_seconds": (t1_morl - t0_morl)
             if (t0_morl is not None and t1_morl is not None)
             else None,
