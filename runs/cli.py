@@ -25,6 +25,7 @@ from architecture_b_iforest.preprocess import Preprocessor
 from architecture_b_iforest.train import train_iforest_from_arrays
 from data.contract_export import export_frozen_contract_to_dir
 from evaluation.metrics import classification_metrics
+from evaluation.meta_selection_report import write_meta_selection_artifacts
 from evaluation.morl_report import evaluate_morl_weight_on_split, run_morl_weight_sweep
 from evaluation.robustness import run_robustness_suite
 from runs.reporting import (
@@ -312,9 +313,11 @@ def main(
     meta_hash: str | None = None
     selected_weight: list[float] | None = None
     selected_test_path: str | None = None
+    selected_test_md_path: str | None = None
     meta_method: dict[str, Any] = {}
     meta_constraints: dict[str, Any] = {}
     meta_selection_path: str | None = None
+    meta_selection_md_path: str | None = None
     if config_paths.get("morl"):
         morl_cfg = load_yaml(config_paths["morl"])
         morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))
@@ -370,10 +373,15 @@ def main(
                         split="test",
                         w=selected_weight,
                     )
-                    selected_test_path = os.path.join(morl_eval_dir, "morl_selected_test.json")
-                    with open(selected_test_path, "w") as f:
-                        json.dump(selected_row, f, indent=2)
-                    meta_selection_path = os.path.join(morl_eval_dir, "meta_selection.json")
+                    artifacts = write_meta_selection_artifacts(
+                        out_dir=morl_eval_dir,
+                        selection=selection,
+                        selected_test=selected_row,
+                    )
+                    selected_test_path = artifacts["selected_test_json"]
+                    selected_test_md_path = artifacts["selected_test_md"]
+                    meta_selection_path = artifacts["meta_selection_json"]
+                    meta_selection_md_path = artifacts["meta_selection_md"]
 
     metrics, _, thresholds = _evaluate_from_contract(
         contract_dir=contract_dir,
@@ -486,8 +494,14 @@ def main(
             "selection_output_path": os.path.relpath(meta_selection_path, run_root)
             if meta_selection_path
             else None,
+            "selection_report_path": os.path.relpath(meta_selection_md_path, run_root)
+            if meta_selection_md_path
+            else None,
             "selected_test_output_path": os.path.relpath(selected_test_path, run_root)
             if selected_test_path
+            else None,
+            "selected_test_report_path": os.path.relpath(selected_test_md_path, run_root)
+            if selected_test_md_path
             else None,
         },
     )
