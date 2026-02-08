@@ -192,7 +192,10 @@ def _constraint_violation_score(row: CandidateRow, c: ConstraintConfig) -> float
 
 def _is_feasible(row: CandidateRow, c: ConstraintConfig) -> bool:
     m = row.metrics
-    if c.alerts_per_1k_max is not None and m.get("alerts_per_1k", float("inf")) > c.alerts_per_1k_max:
+    if (
+        c.alerts_per_1k_max is not None
+        and m.get("alerts_per_1k", float("inf")) > c.alerts_per_1k_max
+    ):
         return False
     if c.recall_min is not None and m.get("recall", 0.0) < c.recall_min:
         return False
@@ -269,7 +272,9 @@ class UCBSelector:
         objective: ObjectiveConfig,
         seed: int,
     ) -> SelectionOutcome:
-        true_rewards = np.asarray([score_candidate(r.metrics, objective) for r in rows], dtype=np.float64)
+        true_rewards = np.asarray(
+            [score_candidate(r.metrics, objective) for r in rows], dtype=np.float64
+        )
         n_arms = len(rows)
         rounds = max(self.rounds, n_arms)
         rng = np.random.default_rng(seed)
@@ -328,7 +333,9 @@ class ThompsonSelector:
         objective: ObjectiveConfig,
         seed: int,
     ) -> SelectionOutcome:
-        true_rewards = np.asarray([score_candidate(r.metrics, objective) for r in rows], dtype=np.float64)
+        true_rewards = np.asarray(
+            [score_candidate(r.metrics, objective) for r in rows], dtype=np.float64
+        )
         n_arms = len(rows)
         rounds = max(self.rounds, n_arms)
         rng = np.random.default_rng(seed)

@@ -145,7 +145,9 @@ def _load_actor(
     hidden: list[int],
     k_objectives: int,
 ) -> tuple[PreferenceConditionedActor, int]:
-    actor = PreferenceConditionedActor(state_dim=128, k_objectives=k_objectives, hidden=hidden, action_dim=2)
+    actor = PreferenceConditionedActor(
+        state_dim=128, k_objectives=k_objectives, hidden=hidden, action_dim=2
+    )
     actor_path = os.path.join(morl_model_dir, "actor.pt")
     actor.load_state_dict(torch.load(actor_path, map_location="cpu"))
     actor.eval()
@@ -289,7 +291,9 @@ def run_morl_weight_sweep(
 
     if hv_value is not None:
         with open(os.path.join(out_dir, f"hypervolume_{split}.json"), "w") as f:
-            json.dump({"split": split, "primary_metrics": primary_metrics, "value": hv_value}, f, indent=2)
+            json.dump(
+                {"split": split, "primary_metrics": primary_metrics, "value": hv_value}, f, indent=2
+            )
 
     # Backward compatibility for existing v0.5.0 consumers expecting test filenames.
     if split == "test":
@@ -307,6 +311,10 @@ def run_morl_weight_sweep(
         )
         if hv_value is not None:
             with open(os.path.join(out_dir, "hypervolume.json"), "w") as f:
-                json.dump({"split": split, "primary_metrics": primary_metrics, "value": hv_value}, f, indent=2)
+                json.dump(
+                    {"split": split, "primary_metrics": primary_metrics, "value": hv_value},
+                    f,
+                    indent=2,
+                )
 
     return payload

@@ -24,25 +24,53 @@ def test_meta_controller_greedy_constraints_and_tie_break(tmp_path: Path) -> Non
             "results": [
                 {
                     "w": [0.7, 0.2, 0.1],
-                    "metrics": {"pr_auc": 0.80, "f1": 0.10, "precision": 0.40, "recall": 0.70, "roc_auc": 0.60, "alerts_per_1k": 50.0},
+                    "metrics": {
+                        "pr_auc": 0.80,
+                        "f1": 0.10,
+                        "precision": 0.40,
+                        "recall": 0.70,
+                        "roc_auc": 0.60,
+                        "alerts_per_1k": 50.0,
+                    },
                     "objective_means": {"detect": 0.1, "fp_cost": -0.2, "analyst_cost": -0.3},
                     "meta": {"seed": 42},
                 },
                 {
                     "w": [0.5, 0.3, 0.2],
-                    "metrics": {"pr_auc": 0.75, "f1": 0.12, "precision": 0.50, "recall": 0.65, "roc_auc": 0.62, "alerts_per_1k": 25.0},
+                    "metrics": {
+                        "pr_auc": 0.75,
+                        "f1": 0.12,
+                        "precision": 0.50,
+                        "recall": 0.65,
+                        "roc_auc": 0.62,
+                        "alerts_per_1k": 25.0,
+                    },
                     "objective_means": {"detect": 0.2, "fp_cost": -0.1, "analyst_cost": -0.2},
                     "meta": {"seed": 42},
                 },
                 {
                     "w": [0.4, 0.4, 0.2],
-                    "metrics": {"pr_auc": 0.75, "f1": 0.11, "precision": 0.49, "recall": 0.68, "roc_auc": 0.61, "alerts_per_1k": 20.0},
+                    "metrics": {
+                        "pr_auc": 0.75,
+                        "f1": 0.11,
+                        "precision": 0.49,
+                        "recall": 0.68,
+                        "roc_auc": 0.61,
+                        "alerts_per_1k": 20.0,
+                    },
                     "objective_means": {"detect": 0.2, "fp_cost": -0.2, "analyst_cost": -0.1},
                     "meta": {"seed": 42},
                 },
                 {
                     "w": [0.2, 0.2, 0.6],
-                    "metrics": {"pr_auc": 0.70, "f1": 0.20, "precision": 0.70, "recall": 0.80, "roc_auc": 0.66, "alerts_per_1k": 10.0},
+                    "metrics": {
+                        "pr_auc": 0.70,
+                        "f1": 0.20,
+                        "precision": 0.70,
+                        "recall": 0.80,
+                        "roc_auc": 0.66,
+                        "alerts_per_1k": 10.0,
+                    },
                     "objective_means": {"detect": 0.4, "fp_cost": -0.1, "analyst_cost": -0.1},
                     "meta": {"seed": 42},
                 },
@@ -79,7 +107,12 @@ def test_meta_controller_greedy_constraints_and_tie_break(tmp_path: Path) -> Non
                 },
                 "method": {
                     "name": "greedy",
-                    "params": {"rounds": 10, "explore_frac": 0.2, "ucb_c": 1.0, "thompson_sigma": 0.05},
+                    "params": {
+                        "rounds": 10,
+                        "explore_frac": 0.2,
+                        "ucb_c": 1.0,
+                        "thompson_sigma": 0.05,
+                    },
                 },
             }
         },

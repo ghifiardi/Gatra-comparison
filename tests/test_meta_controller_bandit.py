@@ -24,19 +24,40 @@ def _write_common_files(tmp_path: Path) -> tuple[Path, Path]:
             "results": [
                 {
                     "w": [0.7, 0.2, 0.1],
-                    "metrics": {"pr_auc": 0.90, "f1": 0.20, "precision": 0.50, "recall": 0.70, "roc_auc": 0.70, "alerts_per_1k": 35.0},
+                    "metrics": {
+                        "pr_auc": 0.90,
+                        "f1": 0.20,
+                        "precision": 0.50,
+                        "recall": 0.70,
+                        "roc_auc": 0.70,
+                        "alerts_per_1k": 35.0,
+                    },
                     "objective_means": {"detect": 0.2, "fp_cost": -0.3, "analyst_cost": -0.3},
                     "meta": {"seed": 7},
                 },
                 {
                     "w": [0.5, 0.3, 0.2],
-                    "metrics": {"pr_auc": 0.75, "f1": 0.10, "precision": 0.40, "recall": 0.60, "roc_auc": 0.60, "alerts_per_1k": 15.0},
+                    "metrics": {
+                        "pr_auc": 0.75,
+                        "f1": 0.10,
+                        "precision": 0.40,
+                        "recall": 0.60,
+                        "roc_auc": 0.60,
+                        "alerts_per_1k": 15.0,
+                    },
                     "objective_means": {"detect": 0.1, "fp_cost": -0.2, "analyst_cost": -0.2},
                     "meta": {"seed": 7},
                 },
                 {
                     "w": [0.2, 0.2, 0.6],
-                    "metrics": {"pr_auc": 0.65, "f1": 0.08, "precision": 0.30, "recall": 0.50, "roc_auc": 0.55, "alerts_per_1k": 8.0},
+                    "metrics": {
+                        "pr_auc": 0.65,
+                        "f1": 0.08,
+                        "precision": 0.30,
+                        "recall": 0.50,
+                        "roc_auc": 0.55,
+                        "alerts_per_1k": 8.0,
+                    },
                     "objective_means": {"detect": 0.1, "fp_cost": -0.1, "analyst_cost": -0.1},
                     "meta": {"seed": 7},
                 },
@@ -75,7 +96,12 @@ def test_meta_controller_ucb_is_deterministic(tmp_path: Path) -> None:
                 },
                 "method": {
                     "name": "bandit_ucb",
-                    "params": {"rounds": 10, "explore_frac": 0.2, "ucb_c": 1.0, "thompson_sigma": 0.02},
+                    "params": {
+                        "rounds": 10,
+                        "explore_frac": 0.2,
+                        "ucb_c": 1.0,
+                        "thompson_sigma": 0.02,
+                    },
                 },
             }
         },
@@ -117,7 +143,12 @@ def test_meta_controller_thompson_is_deterministic(tmp_path: Path) -> None:
                 },
                 "method": {
                     "name": "bandit_thompson",
-                    "params": {"rounds": 10, "explore_frac": 0.2, "ucb_c": 1.0, "thompson_sigma": 0.02},
+                    "params": {
+                        "rounds": 10,
+                        "explore_frac": 0.2,
+                        "ucb_c": 1.0,
+                        "thompson_sigma": 0.02,
+                    },
                 },
             }
         },
