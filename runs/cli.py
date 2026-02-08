@@ -24,9 +24,11 @@ from architecture_b_iforest.model import IForestModel
 from architecture_b_iforest.preprocess import Preprocessor
 from architecture_b_iforest.train import train_iforest_from_arrays
 from data.contract_export import export_frozen_contract_to_dir
+from data.join import build_join_map
 from evaluation.metrics import classification_metrics
 from evaluation.meta_selection_report import write_meta_selection_artifacts
 from evaluation.morl_report import evaluate_morl_weight_on_split, run_morl_weight_sweep
+from evaluation.policy_eval import run_policy_eval
 from evaluation.robustness import run_robustness_suite
 from runs.reporting import (
     build_run_manifest,
@@ -73,6 +75,8 @@ def _snapshot_configs(
     robustness_config: str | None = None,
     morl_config: str | None = None,
     meta_config: str | None = None,
+    join_config: str | None = None,
+    policy_eval_config: str | None = None,
 ) -> dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -88,6 +92,10 @@ def _snapshot_configs(
         cfgs["morl.yaml"] = load_yaml(morl_config)
     if meta_config:
         cfgs["meta_controller.yaml"] = load_yaml(meta_config)
+    if join_config:
+        cfgs["join.yaml"] = load_yaml(join_config)
+    if policy_eval_config:
+        cfgs["policy_eval.yaml"] = load_yaml(policy_eval_config)
 
     if quick:
         data_cfg = cfgs["data.yaml"]
@@ -133,6 +141,10 @@ def _snapshot_configs(
         out_paths["morl"] = paths["morl.yaml"]
     if "meta_controller.yaml" in paths:
         out_paths["meta"] = paths["meta_controller.yaml"]
+    if "join.yaml" in paths:
+        out_paths["join"] = paths["join.yaml"]
+    if "policy_eval.yaml" in paths:
+        out_paths["policy_eval"] = paths["policy_eval.yaml"]
     return out_paths
 
 
@@ -186,6 +198,26 @@ def _load_ppo_actor(model_dir: str, ppo_cfg: dict[str, Any]) -> tuple[Actor, flo
     return actor, threshold
 
 
+def _score_iforest(model_dir: str, x7: NDArray[np.float32]) -> tuple[NDArray[np.float64], float]:
+    ifm, prep, threshold = _load_iforest_artifacts(model_dir)
+    x7p = prep.transform(x7)
+    scores = ifm.score(x7p).astype(np.float64)
+    return scores, threshold
+
+
+def _score_ppo(
+    model_dir: str, ppo_cfg: dict[str, Any], x128: NDArray[np.float32]
+) -> tuple[NDArray[np.float64], float]:
+    actor, threshold = _load_ppo_actor(model_dir, ppo_cfg)
+    y_rl_scores: list[float] = []
+    with torch.no_grad():
+        for row in x128:
+            st = torch.tensor(row, dtype=torch.float32).unsqueeze(0)
+            probs = actor(st).squeeze(0).numpy()
+            y_rl_scores.append(float(probs[0] + probs[1]))
+    return np.asarray(y_rl_scores, dtype=np.float64), threshold
+
+
 def _evaluate_from_contract(
     contract_dir: str,
     iforest_dir: str,
@@ -196,18 +228,8 @@ def _evaluate_from_contract(
     os.makedirs(out_dir, exist_ok=True)
     x7_test, x128_test, y_true = _load_contract_test(contract_dir)
 
-    ifm, prep, if_threshold = _load_iforest_artifacts(iforest_dir)
-    x7p = prep.transform(x7_test)
-    y_if_score = ifm.score(x7p)
-
-    actor, rl_threshold = _load_ppo_actor(ppo_dir, ppo_cfg)
-    y_rl_scores: list[float] = []
-    with torch.no_grad():
-        for row in x128_test:
-            st = torch.tensor(row, dtype=torch.float32).unsqueeze(0)
-            probs = actor(st).squeeze(0).numpy()
-            y_rl_scores.append(float(probs[0] + probs[1]))
-    y_rl_score = np.array(y_rl_scores, dtype=float)
+    y_if_score, if_threshold = _score_iforest(iforest_dir, x7_test)
+    y_rl_score, rl_threshold = _score_ppo(ppo_dir, ppo_cfg, x128_test)
 
     if_metrics = classification_metrics(y_true, y_if_score, threshold=if_threshold)
     rl_metrics = classification_metrics(y_true, y_rl_score, threshold=rl_threshold)
@@ -246,6 +268,8 @@ def main(
     robustness_config: str | None = None,
     morl_config: str | None = None,
     meta_config: str | None = None,
+    join_config: str | None = None,
+    policy_eval_config: str | None = None,
     out_root: str = "reports/runs",
     quick: bool = False,
     overwrite: bool = False,
@@ -278,6 +302,8 @@ def main(
         robustness_config=robustness_config,
         morl_config=morl_config,
         meta_config=meta_config,
+        join_config=join_config,
+        policy_eval_config=policy_eval_config,
     )
 
     ppo_cfg = load_yaml(config_paths["ppo"])
@@ -290,6 +316,17 @@ def main(
         include_splits=True,
         contract_id=run_id,
     )
+
+    if config_paths.get("join"):
+        join_out_dir = os.path.join(eval_dir, "join")
+        join_result = build_join_map(
+            contract_dir=contract_dir,
+            join_cfg_path=config_paths["join"],
+            out_dir=join_out_dir,
+        )
+        join_meta = cast(dict[str, Any], join_result.get("meta", {}))
+        join_map_path = cast(str | None, join_result.get("join_map"))
+        join_meta_path = cast(str | None, join_result.get("join_meta"))
 
     x7_train, x128_train, y_train = _load_contract_split(contract_dir, "train")
     x7_val, x128_val, y_val = _load_contract_split(contract_dir, "val")
@@ -318,6 +355,12 @@ def main(
     meta_constraints: dict[str, Any] = {}
     meta_selection_path: str | None = None
     meta_selection_md_path: str | None = None
+    join_meta: dict[str, Any] = {}
+    join_map_path: str | None = None
+    join_meta_path: str | None = None
+    policy_eval_summary: dict[str, Any] = {}
+    policy_eval_json_path: str | None = None
+    policy_eval_md_path: str | None = None
     if config_paths.get("morl"):
         morl_cfg = load_yaml(config_paths["morl"])
         morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))
@@ -409,6 +452,30 @@ def main(
         out_dir=eval_dir,
     )
 
+    if config_paths.get("policy_eval"):
+        x7_val_pe, x128_val_pe, y_val_pe = _load_contract_split(contract_dir, "val")
+        x7_test_pe, x128_test_pe, y_test_pe = _load_contract_test(contract_dir)
+        if_scores_val, _ = _score_iforest(iforest_dir, x7_val_pe)
+        if_scores_test, _ = _score_iforest(iforest_dir, x7_test_pe)
+        ppo_scores_val, _ = _score_ppo(ppo_dir, ppo_cfg, x128_val_pe)
+        ppo_scores_test, _ = _score_ppo(ppo_dir, ppo_cfg, x128_test_pe)
+        policy_eval_out = run_policy_eval(
+            policy_cfg_path=config_paths["policy_eval"],
+            y_val=y_val_pe,
+            y_test=y_test_pe,
+            val_scores_by_model={"iforest": if_scores_val, "ppo": ppo_scores_val},
+            test_scores_by_model={"iforest": if_scores_test, "ppo": ppo_scores_test},
+            out_dir=os.path.join(eval_dir, "policy"),
+        )
+        policy_eval_summary = {
+            "mode": policy_eval_out.get("mode"),
+            "primary_metric": policy_eval_out.get("primary_metric"),
+            "constraints": policy_eval_out.get("constraints"),
+        }
+        paths_raw = cast(dict[str, Any], policy_eval_out.get("paths", {}))
+        policy_eval_json_path = cast(str | None, paths_raw.get("json"))
+        policy_eval_md_path = cast(str | None, paths_raw.get("md"))
+
     robustness_hash = None
     robustness_variants: list[str] = []
     robustness_enabled = False
@@ -451,6 +518,10 @@ def main(
         config_hashes["morl"] = file_sha256(config_paths["morl"])
     if config_paths.get("meta"):
         config_hashes["meta_controller"] = file_sha256(config_paths["meta"])
+    if config_paths.get("join"):
+        config_hashes["join"] = file_sha256(config_paths["join"])
+    if config_paths.get("policy_eval"):
+        config_hashes["policy_eval"] = file_sha256(config_paths["policy_eval"])
     config_snapshot = {
         "data": os.path.relpath(config_paths["data"], run_root),
         "iforest": os.path.relpath(config_paths["iforest"], run_root),
@@ -463,6 +534,10 @@ def main(
         config_snapshot["morl"] = os.path.relpath(config_paths["morl"], run_root)
     if config_paths.get("meta"):
         config_snapshot["meta_controller"] = os.path.relpath(config_paths["meta"], run_root)
+    if config_paths.get("join"):
+        config_snapshot["join"] = os.path.relpath(config_paths["join"], run_root)
+    if config_paths.get("policy_eval"):
+        config_snapshot["policy_eval"] = os.path.relpath(config_paths["policy_eval"], run_root)
 
     poetry_lock_hash = None
     lock_path = os.path.join(os.getcwd(), "poetry.lock")
@@ -525,6 +600,28 @@ def main(
             if selected_test_md_path
             else None,
         },
+        join_diagnostics={
+            "enabled": bool(config_paths.get("join")),
+            "config_sha256": file_sha256(config_paths["join"])
+            if config_paths.get("join")
+            else None,
+            "join_map_path": os.path.relpath(join_map_path, run_root) if join_map_path else None,
+            "join_meta_path": os.path.relpath(join_meta_path, run_root) if join_meta_path else None,
+            "summary": join_meta,
+        },
+        policy_eval={
+            "enabled": bool(config_paths.get("policy_eval")),
+            "config_sha256": file_sha256(config_paths["policy_eval"])
+            if config_paths.get("policy_eval")
+            else None,
+            "summary": policy_eval_summary,
+            "json_path": os.path.relpath(policy_eval_json_path, run_root)
+            if policy_eval_json_path
+            else None,
+            "report_path": os.path.relpath(policy_eval_md_path, run_root)
+            if policy_eval_md_path
+            else None,
+        },
     )
     write_run_manifest(os.path.join(report_dir, "run_manifest.json"), manifest)
 
@@ -541,6 +638,7 @@ def main(
         contract_dir=contract_dir,
         run_root=run_root,
         mode="quick" if quick else "full",
+        policy_eval=policy_eval_summary if policy_eval_summary else None,
     )
     with open(os.path.join(report_dir, "summary.md"), "w") as f:
         f.write(summary_md)

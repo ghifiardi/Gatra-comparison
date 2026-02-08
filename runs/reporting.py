@@ -52,6 +52,8 @@ def build_run_manifest(
     robustness: dict[str, Any] | None = None,
     morl: dict[str, Any] | None = None,
     meta_controller: dict[str, Any] | None = None,
+    join_diagnostics: dict[str, Any] | None = None,
+    policy_eval: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
     labels = data_cfg.get("labels", {})
@@ -88,6 +90,8 @@ def build_run_manifest(
         "robustness": robustness or {},
         "morl": morl or {},
         "meta_controller": meta_controller or {},
+        "join_diagnostics": join_diagnostics or {},
+        "policy_eval": policy_eval or {},
     }
     return manifest
 
@@ -111,6 +115,7 @@ def render_summary_md(
     contract_dir: str,
     run_root: str,
     mode: str,
+    policy_eval: dict[str, Any] | None = None,
 ) -> str:
     counts = contract_meta.get("counts", {})
     pos_rates = contract_meta.get("label_pos_rate", {})
@@ -162,26 +167,40 @@ def render_summary_md(
         row("iforest"),
         row("ppo"),
         "",
-        f"- Train time (IF): {train_times.get('iforest', 0.0):.2f}s",
-        f"- Train time (PPO): {train_times.get('ppo', 0.0):.2f}s",
-        "",
-        "## Interpretation",
-        "- Compare F1 and PR-AUC to decide which architecture better fits your operational goals.",
-        "- Use thresholds to tune alert volume vs recall.",
-        "",
-        "## Reproduce",
-        f"- Run dir: {run_root}",
-        f"- Contract dir: {contract_dir}",
-        "- Command:",
-        f"  cd {os.path.dirname(run_root)}",
-        "  python -m runs.cli \\",
-        f"    --data-config {run_root}/config/data.yaml \\",
-        f"    --iforest-config {run_root}/config/iforest.yaml \\",
-        f"    --ppo-config {run_root}/config/ppo.yaml \\",
-        f"    --eval-config {run_root}/config/eval.yaml \\",
-        f"    --out-root {os.path.dirname(run_root)} \\",
-        f"    --run-id {run_id} \\",
-        "    --overwrite",
-        "",
     ]
+    if policy_eval:
+        lines.extend(
+            [
+                "## Policy Evaluation",
+                f"- Mode: {policy_eval.get('mode')}",
+                f"- Primary metric: {policy_eval.get('primary_metric')}",
+                f"- Constraints: {policy_eval.get('constraints')}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            f"- Train time (IF): {train_times.get('iforest', 0.0):.2f}s",
+            f"- Train time (PPO): {train_times.get('ppo', 0.0):.2f}s",
+            "",
+            "## Interpretation",
+            "- Compare F1 and PR-AUC to decide which architecture better fits your operational goals.",
+            "- Use thresholds to tune alert volume vs recall.",
+            "",
+            "## Reproduce",
+            f"- Run dir: {run_root}",
+            f"- Contract dir: {contract_dir}",
+            "- Command:",
+            f"  cd {os.path.dirname(run_root)}",
+            "  python -m runs.cli \\",
+            f"    --data-config {run_root}/config/data.yaml \\",
+            f"    --iforest-config {run_root}/config/iforest.yaml \\",
+            f"    --ppo-config {run_root}/config/ppo.yaml \\",
+            f"    --eval-config {run_root}/config/eval.yaml \\",
+            f"    --out-root {os.path.dirname(run_root)} \\",
+            f"    --run-id {run_id} \\",
+            "    --overwrite",
+            "",
+        ]
+    )
     return "\n".join(lines)
