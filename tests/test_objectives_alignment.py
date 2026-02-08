@@ -33,5 +33,6 @@ def test_realdata_objective_alignment_error_is_clear(tmp_path: Path) -> None:
             objectives=objectives,
             contract_dir=str(contract_dir),
             split="train",
-            normalization="minmax",
+            normalization_cfg={"reference_split": "val", "apply_to": ["val", "test"]},
+            legacy_default_norm="none",
         )

@@ -91,7 +91,12 @@ def _write_markdown(
     split: str,
     objective_source: str,
     level1_stats: dict[str, float],
+    normalization_summary: dict[str, Any],
 ) -> None:
+    normalization_applied = bool(normalization_summary.get("applied", False))
+    signals_used = (
+        "normalized objective signals" if normalization_applied else "raw objective signals"
+    )
     lines = [
         "# MORL Evaluation Summary",
         "",
@@ -100,6 +105,7 @@ def _write_markdown(
         f"- Pareto candidates: {len(pareto_rows)}",
         f"- Primary metrics: {', '.join(primary_metrics)}",
         f"- Objective source: {objective_source}",
+        f"- Reward signals used: {signals_used}",
     ]
     if hypervolume is not None:
         lines.append(f"- Hypervolume: {hypervolume:.6f}")
@@ -121,6 +127,32 @@ def _write_markdown(
         else:
             details = "n/a"
         lines.append(f"- `{name}` ({kind}): {details}")
+    if normalization_summary:
+        lines.extend(["", "## Normalization"])
+        lines.append(f"- applied: {normalization_applied}")
+        lines.append(f"- reference_split: {normalization_summary.get('reference_split')}")
+        lines.append(f"- apply_to: {normalization_summary.get('apply_to')}")
+        lines.append(f"- clip_z: {normalization_summary.get('clip_z')}")
+        lines.append(f"- eps: {normalization_summary.get('eps')}")
+        objectives_stats = normalization_summary.get("objectives", {})
+        if isinstance(objectives_stats, dict) and objectives_stats:
+            lines.extend(
+                [
+                    "",
+                    "| objective | norm | direction | cap_pctl | mean | std | clip_z |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                ]
+            )
+            for name, stat_raw in objectives_stats.items():
+                if not isinstance(stat_raw, dict):
+                    continue
+                stat = cast(dict[str, Any], stat_raw)
+                lines.append(
+                    "| "
+                    f"{name} | {stat.get('norm')} | {stat.get('direction')} |"
+                    f" {stat.get('cap_pctl')} | {float(stat.get('mean', 0.0)):.6f} |"
+                    f" {float(stat.get('std', 0.0)):.6f} | {float(stat.get('clip_z', 0.0)):.2f} |"
+                )
     if objective_source == "level1_realdata":
         lines.extend(
             [
@@ -134,11 +166,17 @@ def _write_markdown(
             lines.extend(
                 [
                     "",
-                    "## Level-1 summary stats",
-                    f"- median_ttt_seconds: {level1_stats.get('ttt_median_seconds', 0.0):.3f}",
-                    f"- p90_ttt_seconds: {level1_stats.get('ttt_p90_seconds', 0.0):.3f}",
-                    f"- coverage_novelty_rate: {level1_stats.get('coverage_novelty_rate', 0.0):.6f}",
-                    f"- coverage_per_1k_events: {level1_stats.get('coverage_per_1k_events', 0.0):.3f}",
+                    "## Level-1 raw stats",
+                    f"- ttt_raw_median_seconds: {level1_stats.get('ttt_raw_median_seconds', 0.0):.3f}",
+                    f"- ttt_raw_p90_seconds: {level1_stats.get('ttt_raw_p90_seconds', 0.0):.3f}",
+                    f"- coverage_raw_novelty_rate: {level1_stats.get('coverage_raw_novelty_rate', 0.0):.6f}",
+                    f"- coverage_raw_rate_per_1k: {level1_stats.get('coverage_raw_rate_per_1k', 0.0):.3f}",
+                    "",
+                    "## Level-1 normalized stats (z-space)",
+                    f"- ttt_norm_median_z: {level1_stats.get('ttt_norm_median_z', 0.0):.6f}",
+                    f"- ttt_norm_p90_z: {level1_stats.get('ttt_norm_p90_z', 0.0):.6f}",
+                    f"- coverage_norm_median_z: {level1_stats.get('coverage_norm_median_z', 0.0):.6f}",
+                    f"- coverage_norm_p90_z: {level1_stats.get('coverage_norm_p90_z', 0.0):.6f}",
                 ]
             )
     lines.extend(
@@ -201,7 +239,8 @@ def evaluate_morl_weight_on_split(
     train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
     hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
     realdata_cfg = cast(dict[str, Any], morl_cfg.get("realdata_objectives", {}))
-    realdata_normalization = str(realdata_cfg.get("normalization", "minmax"))
+    legacy_default_norm = str(realdata_cfg.get("normalization", "none"))
+    normalization_cfg = cast(dict[str, Any], morl_cfg.get("normalization", {}))
     actor, seed = _load_actor(morl_model_dir=morl_model_dir, hidden=hidden, k_objectives=k)
 
     x_split, y_split = _load_contract_split(contract_dir, split)
@@ -232,7 +271,8 @@ def evaluate_morl_weight_on_split(
         objectives=objectives,
         contract_dir=contract_dir,
         split=split,
-        normalization=realdata_normalization,
+        normalization_cfg=normalization_cfg,
+        legacy_default_norm=legacy_default_norm,
     )
     reward_matrix = reward_result.reward_matrix
     objective_means = {objective_names[i]: float(np.mean(reward_matrix[:, i])) for i in range(k)}
@@ -246,6 +286,7 @@ def evaluate_morl_weight_on_split(
             "seed": seed,
             "objective_source": reward_result.source,
             "level1_stats": reward_result.stats,
+            "normalization": reward_result.normalization,
         },
     }
     return row
@@ -300,12 +341,16 @@ def run_morl_weight_sweep(
 
     objective_source = "fallback_synthetic"
     level1_stats: dict[str, float] = {}
+    normalization_summary: dict[str, Any] = {}
     if rows:
         first_meta = cast(dict[str, Any], rows[0].get("meta", {}))
         objective_source = str(first_meta.get("objective_source", "fallback_synthetic"))
         stats_raw = first_meta.get("level1_stats", {})
         if isinstance(stats_raw, dict):
             level1_stats = {str(k): float(v) for k, v in stats_raw.items()}
+        norm_raw = first_meta.get("normalization", {})
+        if isinstance(norm_raw, dict):
+            normalization_summary = cast(dict[str, Any], norm_raw)
 
     payload = {
         "split": split,
@@ -313,6 +358,7 @@ def run_morl_weight_sweep(
         "objective_names": [o.name for o in objectives],
         "objective_source": objective_source,
         "level1_stats": level1_stats,
+        "normalization_summary": normalization_summary,
         "primary_metrics": primary_metrics,
         "results": rows,
         "pareto": pareto_rows,
@@ -338,6 +384,7 @@ def run_morl_weight_sweep(
         split=split,
         objective_source=objective_source,
         level1_stats=level1_stats,
+        normalization_summary=normalization_summary,
     )
 
     if hv_value is not None:
@@ -361,6 +408,7 @@ def run_morl_weight_sweep(
             split=split,
             objective_source=objective_source,
             level1_stats=level1_stats,
+            normalization_summary=normalization_summary,
         )
         if hv_value is not None:
             with open(os.path.join(out_dir, "hypervolume.json"), "w") as f:
