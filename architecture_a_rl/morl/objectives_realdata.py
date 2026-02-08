@@ -44,47 +44,47 @@ def validate_alignment(expected_len: int, **arrays: NDArray[Any]) -> None:
 
 
 def compute_time_to_triage_seconds(
-    session_ids: NDArray[np.str_],
+    group_ids: NDArray[np.str_],
     timestamps_epoch_s: NDArray[np.int64],
 ) -> NDArray[np.float32]:
     validate_alignment(
-        expected_len=int(session_ids.shape[0]),
+        expected_len=int(group_ids.shape[0]),
         timestamps_epoch_s=timestamps_epoch_s,
     )
-    min_by_session: dict[str, int] = {}
-    max_by_session: dict[str, int] = {}
-    for i in range(session_ids.shape[0]):
-        sid = str(session_ids[i]) or "__missing_session__"
+    min_by_group: dict[str, int] = {}
+    max_by_group: dict[str, int] = {}
+    for i in range(group_ids.shape[0]):
+        sid = str(group_ids[i]) or "__missing_group__"
         ts = int(timestamps_epoch_s[i])
-        if sid not in min_by_session:
-            min_by_session[sid] = ts
-            max_by_session[sid] = ts
+        if sid not in min_by_group:
+            min_by_group[sid] = ts
+            max_by_group[sid] = ts
         else:
-            if ts < min_by_session[sid]:
-                min_by_session[sid] = ts
-            if ts > max_by_session[sid]:
-                max_by_session[sid] = ts
-    out = np.zeros((session_ids.shape[0],), dtype=np.float32)
-    for i in range(session_ids.shape[0]):
-        sid = str(session_ids[i]) or "__missing_session__"
-        out[i] = float(max_by_session[sid] - min_by_session[sid])
+            if ts < min_by_group[sid]:
+                min_by_group[sid] = ts
+            if ts > max_by_group[sid]:
+                max_by_group[sid] = ts
+    out = np.zeros((group_ids.shape[0],), dtype=np.float32)
+    for i in range(group_ids.shape[0]):
+        sid = str(group_ids[i]) or "__missing_group__"
+        out[i] = float(max_by_group[sid] - min_by_group[sid])
     return out
 
 
 def compute_coverage_increments(
-    session_ids: NDArray[np.str_],
+    group_ids: NDArray[np.str_],
     pages: NDArray[np.str_],
     actions: NDArray[np.str_],
 ) -> NDArray[np.float32]:
     validate_alignment(
-        expected_len=int(session_ids.shape[0]),
+        expected_len=int(group_ids.shape[0]),
         pages=pages,
         actions=actions,
     )
     seen: dict[str, set[tuple[str, str]]] = {}
-    out = np.zeros((session_ids.shape[0],), dtype=np.float32)
-    for i in range(session_ids.shape[0]):
-        sid = str(session_ids[i]) or "__missing_session__"
+    out = np.zeros((group_ids.shape[0],), dtype=np.float32)
+    for i in range(group_ids.shape[0]):
+        sid = str(group_ids[i]) or "__missing_group__"
         pair = (str(pages[i]) or "__missing_page__", str(actions[i]) or "__missing_action__")
         bucket = seen.setdefault(sid, set())
         if pair not in bucket:
@@ -109,14 +109,22 @@ def _load_i64_array(contract_dir: str, stem: str, split: str) -> NDArray[np.int6
     return cast(NDArray[np.int64], loaded.astype(np.int64))
 
 
-def _compute_session_sizes(session_ids: NDArray[np.str_]) -> NDArray[np.float32]:
+def _load_group_ids(contract_dir: str, split: str) -> NDArray[np.str_]:
+    episode_path = os.path.join(contract_dir, f"episode_id_{split}.npy")
+    if os.path.exists(episode_path):
+        episode_ids = np.load(episode_path, allow_pickle=False).astype(np.int64)
+        return cast(NDArray[np.str_], episode_ids.astype(np.str_))
+    return _load_str_array(contract_dir, "session_id", split)
+
+
+def _compute_session_sizes(group_ids: NDArray[np.str_]) -> NDArray[np.float32]:
     counts: dict[str, int] = {}
-    for sid_raw in session_ids:
-        sid = str(sid_raw) or "__missing_session__"
+    for sid_raw in group_ids:
+        sid = str(sid_raw) or "__missing_group__"
         counts[sid] = counts.get(sid, 0) + 1
-    out = np.zeros((session_ids.shape[0],), dtype=np.float32)
-    for i in range(session_ids.shape[0]):
-        sid = str(session_ids[i]) or "__missing_session__"
+    out = np.zeros((group_ids.shape[0],), dtype=np.float32)
+    for i in range(group_ids.shape[0]):
+        sid = str(group_ids[i]) or "__missing_group__"
         out[i] = float(counts[sid])
     return out
 
@@ -125,13 +133,13 @@ def _load_split_signals(
     contract_dir: str,
     split: str,
 ) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
-    session_ids = _load_str_array(contract_dir, "session_id", split)
+    group_ids = _load_group_ids(contract_dir, split)
     timestamps = _load_i64_array(contract_dir, "timestamps_epoch_s", split)
     pages = _load_str_array(contract_dir, "page", split)
     actions_raw = _load_str_array(contract_dir, "action", split)
-    ttt_raw = compute_time_to_triage_seconds(session_ids=session_ids, timestamps_epoch_s=timestamps)
-    cov_raw = compute_coverage_increments(session_ids=session_ids, pages=pages, actions=actions_raw)
-    session_sizes = _compute_session_sizes(session_ids)
+    ttt_raw = compute_time_to_triage_seconds(group_ids=group_ids, timestamps_epoch_s=timestamps)
+    cov_raw = compute_coverage_increments(group_ids=group_ids, pages=pages, actions=actions_raw)
+    session_sizes = _compute_session_sizes(group_ids)
     return ttt_raw, cov_raw, session_sizes
 
 
@@ -305,8 +313,8 @@ def _upsert_meta(
         "normalization_applied": normalization_applied,
     }
     payload["definitions"] = {
-        _TIME_TO_TRIAGE: "Per-session max(ts)-min(ts); reward is negative when alerting.",
-        _DETECTION_COVERAGE: "Session-level novelty of (page,action); reward is positive when alerting.",
+        _TIME_TO_TRIAGE: "Per-episode max(ts)-min(ts) with session fallback; reward is negative when alerting.",
+        _DETECTION_COVERAGE: "Episode/session novelty of (page,action); reward is positive when alerting.",
     }
     payload["source"] = _load_meta_source(contract_dir)
     payload["normalization"] = normalization_summary

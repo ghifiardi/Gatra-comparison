@@ -15,6 +15,10 @@ from architecture_a_rl.networks import Actor
 from architecture_b_iforest.model import IForestModel
 from architecture_b_iforest.preprocess import Preprocessor
 from evaluation.metrics import classification_metrics
+from evaluation.label_availability import (
+    apply_label_availability,
+    write_label_availability_artifacts,
+)
 from evaluation.variants import (
     VariantBatch,
     apply_label_delay,
@@ -66,7 +70,9 @@ def _as_label_policy(value: str) -> LabelDelayPolicy:
     return cast(LabelDelayPolicy, value)
 
 
-def _load_contract_test(contract_dir: str) -> tuple[FloatArr, FloatArr, IntArr]:
+def _load_contract_test(
+    contract_dir: str,
+) -> tuple[FloatArr, FloatArr, IntArr, NDArray[np.int64], NDArray[np.int64]]:
     p = Path(contract_dir)
     X7 = np.load(p / "features_v7_test.npy").astype(np.float32)
     X128 = np.load(p / "features_v128_test.npy").astype(np.float32)
@@ -75,7 +81,15 @@ def _load_contract_test(contract_dir: str) -> tuple[FloatArr, FloatArr, IntArr]:
         y = np.load(y_path)
     else:
         y = np.load(p / "y_true.npy")
-    return X7, X128, y.astype(np.int8)
+    timestamps = np.load(p / "timestamps_epoch_s_test.npy").astype(np.int64)
+    created_path = p / "label_created_at_epoch_s_test.npy"
+    if created_path.exists():
+        label_created = np.load(created_path).astype(np.int64)
+    else:
+        label_created = timestamps.copy()
+    if y.shape[0] != timestamps.shape[0] or y.shape[0] != label_created.shape[0]:
+        raise ValueError("Contract label/timestamp arrays are misaligned for robustness evaluation")
+    return X7, X128, y.astype(np.int8), timestamps, label_created
 
 
 def _filter_unknown(y: IntArr, scores: NDArray[np.floating[Any]]) -> tuple[IntArr, FloatArr]:
@@ -172,7 +186,7 @@ def run_robustness_suite(
     outp = Path(out_dir)
     outp.mkdir(parents=True, exist_ok=True)
 
-    X7_base, X128_base, y_base = _load_contract_test(contract_dir)
+    X7_base, X128_base, y_base, ts_base, label_created_base = _load_contract_test(contract_dir)
     ppo_cfg = _read_yaml(ppo_config)
 
     variants = rcfg.get("variants", [])
@@ -224,9 +238,29 @@ def run_robustness_suite(
                 batches.append(apply_time_slice(X7_base, X128_base, y_base, fs, fe, label))
 
         elif kind == "label_delay":
-            frac = float(v.get("fraction", 0.1))
             policy = _as_label_policy(str(v.get("policy", "treat_as_unknown")))
-            y2, meta_delay = apply_label_delay(y_base, frac, policy, rng)
+            if "delay" in v or "eval_time_epoch_s" in v:
+                resolved_policy = "treat_as_unknown" if policy == "drop" else policy
+                y2, available_mask, meta_delay = apply_label_availability(
+                    y_true=y_base.astype(np.int_),
+                    event_timestamps_epoch_s=ts_base,
+                    label_created_at_epoch_s=label_created_base,
+                    delay=str(v.get("delay", "7d")),
+                    policy=resolved_policy,
+                    eval_time_epoch_s=int(v["eval_time_epoch_s"])
+                    if "eval_time_epoch_s" in v
+                    else None,
+                )
+                write_label_availability_artifacts(
+                    out_dir=str(outp),
+                    split="test",
+                    available_mask=available_mask,
+                    y_available=y2,
+                    meta=meta_delay,
+                )
+            else:
+                frac = float(v.get("fraction", 0.1))
+                y2, meta_delay = apply_label_delay(y_base, frac, policy, rng)
             batches = [VariantBatch(name=name, X7=X7_base, X128=X128_base, y=y2, meta=meta_delay)]
 
         elif kind == "compose":
@@ -269,12 +303,33 @@ def run_robustness_suite(
                         rng,
                     )
                 elif sk == "label_delay":
-                    y, _m = apply_label_delay(
-                        y,
-                        float(step.get("fraction", 0.1)),
-                        _as_label_policy(str(step.get("policy", "treat_as_unknown"))),
-                        rng,
-                    )
+                    policy = _as_label_policy(str(step.get("policy", "treat_as_unknown")))
+                    if "delay" in step or "eval_time_epoch_s" in step:
+                        resolved_policy = "treat_as_unknown" if policy == "drop" else policy
+                        y, available_mask, meta_delay = apply_label_availability(
+                            y_true=y.astype(np.int_),
+                            event_timestamps_epoch_s=ts_base,
+                            label_created_at_epoch_s=label_created_base,
+                            delay=str(step.get("delay", "7d")),
+                            policy=resolved_policy,
+                            eval_time_epoch_s=int(step["eval_time_epoch_s"])
+                            if "eval_time_epoch_s" in step
+                            else None,
+                        )
+                        write_label_availability_artifacts(
+                            out_dir=str(outp),
+                            split="test",
+                            available_mask=available_mask,
+                            y_available=y,
+                            meta=meta_delay,
+                        )
+                    else:
+                        y, _m = apply_label_delay(
+                            y,
+                            float(step.get("fraction", 0.1)),
+                            policy,
+                            rng,
+                        )
                 else:
                     raise ValueError(f"Unknown compose step kind: {sk}")
 

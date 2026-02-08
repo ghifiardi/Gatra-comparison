@@ -60,6 +60,33 @@ class ContractPaths:
     row_key_train_npy: str | None = None
     row_key_val_npy: str | None = None
     row_key_test_npy: str | None = None
+    alarm_id_train_npy: str | None = None
+    alarm_id_val_npy: str | None = None
+    alarm_id_test_npy: str | None = None
+    label_row_key_train_npy: str | None = None
+    label_row_key_val_npy: str | None = None
+    label_row_key_test_npy: str | None = None
+    label_alarm_id_train_npy: str | None = None
+    label_alarm_id_val_npy: str | None = None
+    label_alarm_id_test_npy: str | None = None
+    label_session_id_train_npy: str | None = None
+    label_session_id_val_npy: str | None = None
+    label_session_id_test_npy: str | None = None
+    label_user_train_npy: str | None = None
+    label_user_val_npy: str | None = None
+    label_user_test_npy: str | None = None
+    label_created_at_train_npy: str | None = None
+    label_created_at_val_npy: str | None = None
+    label_created_at_test_npy: str | None = None
+    episode_id_train_npy: str | None = None
+    episode_id_val_npy: str | None = None
+    episode_id_test_npy: str | None = None
+    episode_start_ts_train_npy: str | None = None
+    episode_start_ts_val_npy: str | None = None
+    episode_start_ts_test_npy: str | None = None
+    episode_end_ts_train_npy: str | None = None
+    episode_end_ts_val_npy: str | None = None
+    episode_end_ts_test_npy: str | None = None
 
 
 def _contract_id() -> str:
@@ -136,11 +163,86 @@ def _attr_array(events: list[Any], attr: str) -> NDArray[np.str_]:
     return _string_array([cast(str | None, getattr(e, attr, None)) for e in events])
 
 
+def _label_attr_array(labels: list[Any], attr: str) -> NDArray[np.str_]:
+    return _string_array([cast(str | None, getattr(lb, attr, None)) for lb in labels])
+
+
+def _label_created_array(labels: list[Any], events: list[Any]) -> NDArray[np.int64]:
+    if len(labels) != len(events):
+        raise ValueError(
+            "Alignment error: labels and events differ in length while exporting label_created_at"
+        )
+    created: list[int] = []
+    for lb, ev in zip(labels, events):
+        raw = getattr(lb, "label_created_at_epoch_s", None)
+        if raw is None:
+            created.append(_epoch_s(ev))
+        else:
+            created.append(int(raw))
+    return np.asarray(created, dtype=np.int64)
+
+
+def _episode_gap_seconds(cfg: dict[str, Any]) -> int:
+    episodes_cfg = cast(dict[str, Any], cfg.get("episodes", {}))
+    raw = episodes_cfg.get("inactivity_gap_seconds", 1800)
+    gap = int(raw)
+    return max(0, gap)
+
+
+def _compute_episode_arrays(
+    session_ids: NDArray[np.str_],
+    timestamps: NDArray[np.int64],
+    gap_seconds: int,
+) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.int64]]:
+    n = int(timestamps.shape[0])
+    episode_id = np.zeros((n,), dtype=np.int64)
+    episode_start = np.zeros((n,), dtype=np.int64)
+    episode_end = np.zeros((n,), dtype=np.int64)
+    if n == 0:
+        return episode_id, episode_start, episode_end
+
+    current_episode = 0
+    current_start_idx = 0
+    prev_sid = str(session_ids[0])
+    prev_ts = int(timestamps[0])
+
+    for i in range(n):
+        sid = str(session_ids[i])
+        ts = int(timestamps[i])
+        if i > 0:
+            is_new = sid != prev_sid or ts < prev_ts or (ts - prev_ts) > gap_seconds
+            if is_new:
+                start_ts = int(timestamps[current_start_idx])
+                end_ts = int(timestamps[i - 1])
+                episode_start[current_start_idx:i] = start_ts
+                episode_end[current_start_idx:i] = end_ts
+                current_episode += 1
+                current_start_idx = i
+        episode_id[i] = current_episode
+        prev_sid = sid
+        prev_ts = ts
+
+    start_ts = int(timestamps[current_start_idx])
+    end_ts = int(timestamps[n - 1])
+    episode_start[current_start_idx:n] = start_ts
+    episode_end[current_start_idx:n] = end_ts
+    return episode_id, episode_start, episode_end
+
+
+def compute_episode_segments(
+    session_ids: NDArray[np.str_],
+    timestamps: NDArray[np.int64],
+    gap_seconds: int = 1800,
+) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.int64]]:
+    return _compute_episode_arrays(session_ids, timestamps, max(0, int(gap_seconds)))
+
+
 def _assert_aligned(
     split: str,
     y: NDArray[np.int8],
     timestamps: NDArray[np.int64],
     session_ids: NDArray[np.str_],
+    **extra_arrays: NDArray[Any],
 ) -> None:
     n = int(y.shape[0])
     if int(timestamps.shape[0]) != n:
@@ -153,6 +255,12 @@ def _assert_aligned(
             f"Alignment error in split '{split}': y has {n} rows but session_id has"
             f" {int(session_ids.shape[0])}"
         )
+    for name, arr in extra_arrays.items():
+        if int(arr.shape[0]) != n:
+            raise ValueError(
+                f"Alignment error in split '{split}': y has {n} rows but {name} has"
+                f" {int(arr.shape[0])}"
+            )
 
 
 def export_frozen_contract_to_dir(
@@ -186,10 +294,52 @@ def export_frozen_contract_to_dir(
     session_train = _attr_array(train_kept, "session_id")
     session_val = _attr_array(val_kept, "session_id")
     session_test = _attr_array(test_kept, "session_id")
+    label_created_train = _label_created_array(train_labels_kept, train_kept)
+    label_created_val = _label_created_array(val_labels_kept, val_kept)
+    label_created_test = _label_created_array(test_labels_kept, test_kept)
 
-    _assert_aligned("train", y_train, ts_train, session_train)
-    _assert_aligned("val", y_val, ts_val, session_val)
-    _assert_aligned("test", y_test, ts_test, session_test)
+    cfg = _load_yaml(data_cfg_path)
+    gap_seconds = _episode_gap_seconds(cfg)
+    episode_id_train, episode_start_train, episode_end_train = _compute_episode_arrays(
+        session_train, ts_train, gap_seconds
+    )
+    episode_id_val, episode_start_val, episode_end_val = _compute_episode_arrays(
+        session_val, ts_val, gap_seconds
+    )
+    episode_id_test, episode_start_test, episode_end_test = _compute_episode_arrays(
+        session_test, ts_test, gap_seconds
+    )
+
+    _assert_aligned(
+        "train",
+        y_train,
+        ts_train,
+        session_train,
+        label_created_at_epoch_s=label_created_train,
+        episode_id=episode_id_train,
+        episode_start_ts=episode_start_train,
+        episode_end_ts=episode_end_train,
+    )
+    _assert_aligned(
+        "val",
+        y_val,
+        ts_val,
+        session_val,
+        label_created_at_epoch_s=label_created_val,
+        episode_id=episode_id_val,
+        episode_start_ts=episode_start_val,
+        episode_end_ts=episode_end_val,
+    )
+    _assert_aligned(
+        "test",
+        y_test,
+        ts_test,
+        session_test,
+        label_created_at_epoch_s=label_created_test,
+        episode_id=episode_id_test,
+        episode_start_ts=episode_start_test,
+        episode_end_ts=episode_end_test,
+    )
 
     def _df(items: list[Any]) -> pd.DataFrame:
         return pd.DataFrame([item.model_dump() for item in items])
@@ -247,6 +397,33 @@ def export_frozen_contract_to_dir(
     row_key_train_npy = os.path.join(out_dir, "row_key_train.npy")
     row_key_val_npy = os.path.join(out_dir, "row_key_val.npy")
     row_key_test_npy = os.path.join(out_dir, "row_key_test.npy")
+    alarm_id_train_npy = os.path.join(out_dir, "alarm_id_train.npy")
+    alarm_id_val_npy = os.path.join(out_dir, "alarm_id_val.npy")
+    alarm_id_test_npy = os.path.join(out_dir, "alarm_id_test.npy")
+    label_row_key_train_npy = os.path.join(out_dir, "label_row_key_train.npy")
+    label_row_key_val_npy = os.path.join(out_dir, "label_row_key_val.npy")
+    label_row_key_test_npy = os.path.join(out_dir, "label_row_key_test.npy")
+    label_alarm_id_train_npy = os.path.join(out_dir, "label_alarm_id_train.npy")
+    label_alarm_id_val_npy = os.path.join(out_dir, "label_alarm_id_val.npy")
+    label_alarm_id_test_npy = os.path.join(out_dir, "label_alarm_id_test.npy")
+    label_session_id_train_npy = os.path.join(out_dir, "label_session_id_train.npy")
+    label_session_id_val_npy = os.path.join(out_dir, "label_session_id_val.npy")
+    label_session_id_test_npy = os.path.join(out_dir, "label_session_id_test.npy")
+    label_user_train_npy = os.path.join(out_dir, "label_user_train.npy")
+    label_user_val_npy = os.path.join(out_dir, "label_user_val.npy")
+    label_user_test_npy = os.path.join(out_dir, "label_user_test.npy")
+    label_created_at_train_npy = os.path.join(out_dir, "label_created_at_epoch_s_train.npy")
+    label_created_at_val_npy = os.path.join(out_dir, "label_created_at_epoch_s_val.npy")
+    label_created_at_test_npy = os.path.join(out_dir, "label_created_at_epoch_s_test.npy")
+    episode_id_train_npy = os.path.join(out_dir, "episode_id_train.npy")
+    episode_id_val_npy = os.path.join(out_dir, "episode_id_val.npy")
+    episode_id_test_npy = os.path.join(out_dir, "episode_id_test.npy")
+    episode_start_ts_train_npy = os.path.join(out_dir, "episode_start_ts_train.npy")
+    episode_start_ts_val_npy = os.path.join(out_dir, "episode_start_ts_val.npy")
+    episode_start_ts_test_npy = os.path.join(out_dir, "episode_start_ts_test.npy")
+    episode_end_ts_train_npy = os.path.join(out_dir, "episode_end_ts_train.npy")
+    episode_end_ts_val_npy = os.path.join(out_dir, "episode_end_ts_val.npy")
+    episode_end_ts_test_npy = os.path.join(out_dir, "episode_end_ts_test.npy")
 
     np.save(v7_train_npy, X7_train)
     np.save(v128_train_npy, X128_train)
@@ -275,6 +452,33 @@ def export_frozen_contract_to_dir(
     np.save(row_key_train_npy, _attr_array(train_kept, "row_key"))
     np.save(row_key_val_npy, _attr_array(val_kept, "row_key"))
     np.save(row_key_test_npy, _attr_array(test_kept, "row_key"))
+    np.save(alarm_id_train_npy, _attr_array(train_kept, "alarm_id"))
+    np.save(alarm_id_val_npy, _attr_array(val_kept, "alarm_id"))
+    np.save(alarm_id_test_npy, _attr_array(test_kept, "alarm_id"))
+    np.save(label_row_key_train_npy, _label_attr_array(train_labels_kept, "row_key"))
+    np.save(label_row_key_val_npy, _label_attr_array(val_labels_kept, "row_key"))
+    np.save(label_row_key_test_npy, _label_attr_array(test_labels_kept, "row_key"))
+    np.save(label_alarm_id_train_npy, _label_attr_array(train_labels_kept, "alarm_id"))
+    np.save(label_alarm_id_val_npy, _label_attr_array(val_labels_kept, "alarm_id"))
+    np.save(label_alarm_id_test_npy, _label_attr_array(test_labels_kept, "alarm_id"))
+    np.save(label_session_id_train_npy, _attr_array(train_kept, "session_id"))
+    np.save(label_session_id_val_npy, _attr_array(val_kept, "session_id"))
+    np.save(label_session_id_test_npy, _attr_array(test_kept, "session_id"))
+    np.save(label_user_train_npy, _attr_array(train_kept, "user"))
+    np.save(label_user_val_npy, _attr_array(val_kept, "user"))
+    np.save(label_user_test_npy, _attr_array(test_kept, "user"))
+    np.save(label_created_at_train_npy, label_created_train)
+    np.save(label_created_at_val_npy, label_created_val)
+    np.save(label_created_at_test_npy, label_created_test)
+    np.save(episode_id_train_npy, episode_id_train)
+    np.save(episode_id_val_npy, episode_id_val)
+    np.save(episode_id_test_npy, episode_id_test)
+    np.save(episode_start_ts_train_npy, episode_start_train)
+    np.save(episode_start_ts_val_npy, episode_start_val)
+    np.save(episode_start_ts_test_npy, episode_start_test)
+    np.save(episode_end_ts_train_npy, episode_end_train)
+    np.save(episode_end_ts_val_npy, episode_end_val)
+    np.save(episode_end_ts_test_npy, episode_end_test)
 
     # Backward-compatible test names
     v7_npy = os.path.join(out_dir, "features_v7.npy")
@@ -287,7 +491,6 @@ def export_frozen_contract_to_dir(
     with open(schema_hash_txt, "w") as f:
         f.write(schema_hash)
 
-    cfg = _load_yaml(data_cfg_path)
     dataset_cfg = cast(dict[str, Any], cfg.get("dataset", {}))
     meta = {
         "contract_id": contract_id or os.path.basename(out_dir),
@@ -312,6 +515,7 @@ def export_frozen_contract_to_dir(
         "episodes": {
             "source": os.path.basename(str(dataset_cfg.get("path", "unknown"))),
             "keys": ["session_id", "user"],
+            "inactivity_gap_seconds": gap_seconds,
             "files": [
                 "session_id_train.npy",
                 "session_id_val.npy",
@@ -319,7 +523,28 @@ def export_frozen_contract_to_dir(
                 "user_train.npy",
                 "user_val.npy",
                 "user_test.npy",
+                "episode_id_train.npy",
+                "episode_id_val.npy",
+                "episode_id_test.npy",
+                "episode_start_ts_train.npy",
+                "episode_start_ts_val.npy",
+                "episode_start_ts_test.npy",
+                "episode_end_ts_train.npy",
+                "episode_end_ts_val.npy",
+                "episode_end_ts_test.npy",
             ],
+        },
+        "label_availability": {
+            "timestamp_field": "label_created_at_epoch_s",
+            "files": [
+                "label_created_at_epoch_s_train.npy",
+                "label_created_at_epoch_s_val.npy",
+                "label_created_at_epoch_s_test.npy",
+            ],
+        },
+        "join_fields": {
+            "event_keys": ["alarm_id", "row_key", "session_id", "user", "timestamps_epoch_s"],
+            "label_keys": ["alarm_id", "row_key", "session_id", "user", "label_created_at_epoch_s"],
         },
     }
     meta_json = os.path.join(out_dir, "meta.json")
@@ -367,6 +592,33 @@ def export_frozen_contract_to_dir(
         row_key_train_npy=row_key_train_npy,
         row_key_val_npy=row_key_val_npy,
         row_key_test_npy=row_key_test_npy,
+        alarm_id_train_npy=alarm_id_train_npy,
+        alarm_id_val_npy=alarm_id_val_npy,
+        alarm_id_test_npy=alarm_id_test_npy,
+        label_row_key_train_npy=label_row_key_train_npy,
+        label_row_key_val_npy=label_row_key_val_npy,
+        label_row_key_test_npy=label_row_key_test_npy,
+        label_alarm_id_train_npy=label_alarm_id_train_npy,
+        label_alarm_id_val_npy=label_alarm_id_val_npy,
+        label_alarm_id_test_npy=label_alarm_id_test_npy,
+        label_session_id_train_npy=label_session_id_train_npy,
+        label_session_id_val_npy=label_session_id_val_npy,
+        label_session_id_test_npy=label_session_id_test_npy,
+        label_user_train_npy=label_user_train_npy,
+        label_user_val_npy=label_user_val_npy,
+        label_user_test_npy=label_user_test_npy,
+        label_created_at_train_npy=label_created_at_train_npy,
+        label_created_at_val_npy=label_created_at_val_npy,
+        label_created_at_test_npy=label_created_at_test_npy,
+        episode_id_train_npy=episode_id_train_npy,
+        episode_id_val_npy=episode_id_val_npy,
+        episode_id_test_npy=episode_id_test_npy,
+        episode_start_ts_train_npy=episode_start_ts_train_npy,
+        episode_start_ts_val_npy=episode_start_ts_val_npy,
+        episode_start_ts_test_npy=episode_start_ts_test_npy,
+        episode_end_ts_train_npy=episode_end_ts_train_npy,
+        episode_end_ts_val_npy=episode_end_ts_val_npy,
+        episode_end_ts_test_npy=episode_end_ts_test_npy,
     )
 
 

@@ -136,6 +136,18 @@ splits:
     assert len(session_train) == len(ts_train)
     assert len(session_val) == len(ts_val)
     assert len(session_test) == len(ts_test)
+    label_created_train = np.load(paths.label_created_at_train_npy or "")
+    label_created_val = np.load(paths.label_created_at_val_npy or "")
+    label_created_test = np.load(paths.label_created_at_test_npy or "")
+    episode_id_train = np.load(paths.episode_id_train_npy or "")
+    episode_start_train = np.load(paths.episode_start_ts_train_npy or "")
+    episode_end_train = np.load(paths.episode_end_ts_train_npy or "")
+    assert label_created_train.tolist() == [1735732800]
+    assert label_created_val.tolist() == [1735822800]
+    assert label_created_test.tolist() == [1735912800]
+    assert episode_id_train.tolist() == [0]
+    assert episode_start_train.tolist() == [1735732800]
+    assert episode_end_train.tolist() == [1735732800]
 
     events_train_path = Path(paths.events_train_parquet or "")
     if events_train_path.suffix == ".parquet":
@@ -148,3 +160,4 @@ splits:
     with open(paths.meta_json, "r") as f:
         meta = json.load(f)
     assert "episodes" in meta
+    assert "label_availability" in meta

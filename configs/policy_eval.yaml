@@ -1,0 +1,8 @@
+policy_eval:
+  mode: alert_budget  # alert_budget | min_recall | cost_aware
+  primary_metric: f1
+  tie_breaker: alerts_per_1k
+  constraints:
+    alerts_per_1k_max: 10.0
+    recall_min: null
+  triage_seconds_per_alert: 45.0

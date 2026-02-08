@@ -5,9 +5,11 @@ PPO_CONFIG ?= configs/ppo.yaml
 EVAL_CONFIG ?= configs/eval.yaml
 MORL_CONFIG ?= configs/morl.yaml
 META_CONFIG ?= configs/meta_controller.yaml
+JOIN_CONFIG ?= configs/join.yaml
+POLICY_EVAL_CONFIG ?= configs/policy_eval.yaml
 OUT_ROOT ?= reports/runs
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick
 
 format:
 	@$(PY) -m ruff format .
@@ -114,6 +116,39 @@ run_meta_quick:
 	  --eval-config $(EVAL_CONFIG) \
 	  --morl-config $(MORL_CONFIG) \
 	  --meta-config $(META_CONFIG) \
+	  --out-root $(OUT_ROOT) \
+	  --quick
+
+join_diag:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --join-config $(JOIN_CONFIG) \
+	  --out-root $(OUT_ROOT) \
+	  --quick
+
+policy_eval:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --policy-eval-config $(POLICY_EVAL_CONFIG) \
+	  --out-root $(OUT_ROOT) \
+	  --quick
+
+run_morl_policy_quick:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --meta-config $(META_CONFIG) \
+	  --join-config $(JOIN_CONFIG) \
+	  --policy-eval-config $(POLICY_EVAL_CONFIG) \
 	  --out-root $(OUT_ROOT) \
 	  --quick
 

@@ -27,6 +27,11 @@ make run_morl_quick
 Detailed MORL usage and policy-selection guidance:
 - `docs/morl.md`
 
+Operational policy evaluation + join diagnostics quick run:
+```bash
+make run_morl_policy_quick
+```
+
 By default, uses a toy dataset generator (configs/data.yaml: dataset.source=toy).
 Replace data loader in data/loaders.py to read parquet/csv/bq.
 

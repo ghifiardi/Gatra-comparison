@@ -158,8 +158,8 @@ def _write_markdown(
             [
                 "",
                 "## Level-1 objective definitions",
-                "- `time_to_triage_seconds`: per-session max(timestamp)-min(timestamp); minimized in reward.",
-                "- `detection_coverage`: novelty of `(page, action)` interactions within session; maximized in reward.",
+                "- `time_to_triage_seconds`: per-episode max(timestamp)-min(timestamp) (falls back to session); minimized in reward.",
+                "- `detection_coverage`: novelty of `(page, action)` interactions within episode/session; maximized in reward.",
             ]
         )
         if level1_stats:
