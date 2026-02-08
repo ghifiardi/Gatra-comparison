@@ -178,6 +178,61 @@ Hypervolume gives a single scalar quality summary over the evaluated set
 - Balanced operations: select point near the Pareto "knee" where reducing
   alerts further causes a steep drop in detection metrics.
 
+## Operational policy evaluation (v0.7)
+
+v0.7 adds policy evaluation based on VAL threshold tuning and TEST replay.
+
+Quick run with constraints:
+
+```bash
+make policy_eval
+```
+
+Combined quick run (MORL + meta selection + join diagnostics + policy eval):
+
+```bash
+make run_morl_policy_quick
+```
+
+Policy outputs:
+
+- `reports/runs/<run_id>/eval/policy/policy_eval.json`
+- `reports/runs/<run_id>/eval/policy/policy_eval.md`
+
+Modes in `configs/policy_eval.yaml`:
+
+- `alert_budget`: maximize primary metric under `alerts_per_1k_max`.
+- `min_recall`: maximize primary metric with `recall_min`.
+- `cost_aware`: minimize triage time while respecting configured constraints.
+
+The report includes both:
+
+- selected policy-constrained threshold
+- best-F1 threshold baseline
+
+so operational trade-offs are explicit.
+
+## Label availability realism + join diagnostics (v0.7)
+
+Robustness label delay now supports created-time gating using:
+
+- duration delays (`"7d"`, `"12h"`, `"30m"`)
+- policy `treat_as_unknown` (marks labels as `-1`) or `treat_as_benign` (`0`)
+
+When created-time gating is active, artifacts are written under robustness eval:
+
+- `labels_available_mask_test.npy`
+- `y_test_available.npy`
+- `label_delay_meta.json`
+
+Join diagnostics are config-driven via `configs/join.yaml` and write:
+
+- `reports/runs/<run_id>/eval/join/join_map.npz`
+- `reports/runs/<run_id>/eval/join/join_meta.json`
+
+Default join priority is `alarm_id > row_key > time_window` with time-window
+fallback disabled unless explicitly enabled.
+
 ## Constraints
 
 - MORL training/evaluation is contract-only.
