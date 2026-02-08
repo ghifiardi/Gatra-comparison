@@ -54,9 +54,21 @@ robustness:
       fraction: 0.20
       policy: treat_as_unknown
 
+    # Label-created-time realism (contract-only)
+    - name: label_delay_created_7d_unknown
+      kind: label_delay
+      delay: "7d"
+      policy: treat_as_unknown
+
+    - name: label_delay_created_12h_benign
+      kind: label_delay
+      delay: "12h"
+      policy: treat_as_benign
+
     # Combined stress
     - name: stress_combined
       kind: compose
       steps:
         - { kind: missingness, rate: 0.10, strategy: mcar, fill: zero }
         - { kind: noise, sigma: 0.02, distribution: gaussian, clamp: true }
+        - { kind: label_delay, delay: "30m", policy: treat_as_unknown }
