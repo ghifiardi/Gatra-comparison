@@ -4,16 +4,14 @@ import csv
 from dataclasses import asdict
 import json
 import os
-from typing import Any, cast
+from typing import Any, Sequence, cast
 
 import numpy as np
 import torch
 import yaml
 from numpy.typing import NDArray
 
-from architecture_a_rl.morl.networks import (
-    PreferenceConditionedActor,
-)
+from architecture_a_rl.morl.networks import PreferenceConditionedActor
 from architecture_a_rl.morl.objectives import compute_reward_matrix, parse_objectives
 from architecture_a_rl.morl.preferences import normalize_weight_grid
 from evaluation.metrics import classification_metrics
@@ -28,9 +26,14 @@ def _load_morl_cfg(path: str) -> dict[str, Any]:
     return cast(dict[str, Any], cfg["morl"])
 
 
-def _load_contract_test(contract_dir: str) -> tuple[NDArray[np.float32], NDArray[np.int_]]:
-    x = np.load(os.path.join(contract_dir, "features_v128_test.npy")).astype(np.float32)
-    y = np.load(os.path.join(contract_dir, "y_true.npy")).astype(np.int_)
+def _load_contract_split(
+    contract_dir: str, split: str
+) -> tuple[NDArray[np.float32], NDArray[np.int_]]:
+    x = np.load(os.path.join(contract_dir, f"features_v128_{split}.npy")).astype(np.float32)
+    if split == "test":
+        y = np.load(os.path.join(contract_dir, "y_true.npy")).astype(np.int_)
+    else:
+        y = np.load(os.path.join(contract_dir, f"y_{split}.npy")).astype(np.int_)
     return x, y
 
 
@@ -48,7 +51,7 @@ def _to_float(value: object) -> float:
 
 def _write_csv(path: str, rows: list[dict[str, Any]], objective_names: list[str]) -> None:
     cols = [
-        "weights",
+        "w",
         "precision",
         "recall",
         "f1",
@@ -64,7 +67,7 @@ def _write_csv(path: str, rows: list[dict[str, Any]], objective_names: list[str]
             metrics = cast(dict[str, float], row["metrics"])
             obj = cast(dict[str, float], row["objective_means"])
             out: dict[str, Any] = {
-                "weights": json.dumps(row["weights"]),
+                "w": json.dumps(row["w"]),
                 "precision": metrics["precision"],
                 "recall": metrics["recall"],
                 "f1": metrics["f1"],
@@ -84,10 +87,12 @@ def _write_markdown(
     objective_specs: list[dict[str, object]],
     primary_metrics: list[str],
     hypervolume: float | None,
+    split: str,
 ) -> None:
     lines = [
         "# MORL Evaluation Summary",
         "",
+        f"- Split: {split}",
         f"- Evaluated weights: {len(rows)}",
         f"- Pareto candidates: {len(pareto_rows)}",
         f"- Primary metrics: {', '.join(primary_metrics)}",
@@ -121,28 +126,46 @@ def _write_markdown(
             "- Use higher analyst_cost weight when alert budget is constrained.",
             "",
             "## Pareto candidates",
-            "| weights | pr_auc | f1 | alerts_per_1k |",
+            "| w | pr_auc | f1 | alerts_per_1k |",
             "| --- | --- | --- | --- |",
         ]
     )
     for row in pareto_rows:
         m = cast(dict[str, float], row["metrics"])
         lines.append(
-            f"| `{row['weights']}` | {m['pr_auc']:.4f} | {m['f1']:.4f} | {m['alerts_per_1k']:.2f} |"
+            f"| `{row['w']}` | {m['pr_auc']:.4f} | {m['f1']:.4f} | {m['alerts_per_1k']:.2f} |"
         )
 
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
 
-def run_morl_weight_sweep(
+def _load_actor(
+    morl_model_dir: str,
+    hidden: list[int],
+    k_objectives: int,
+) -> tuple[PreferenceConditionedActor, int]:
+    actor = PreferenceConditionedActor(state_dim=128, k_objectives=k_objectives, hidden=hidden, action_dim=2)
+    actor_path = os.path.join(morl_model_dir, "actor.pt")
+    actor.load_state_dict(torch.load(actor_path, map_location="cpu"))
+    actor.eval()
+
+    seed = 0
+    meta_path = os.path.join(morl_model_dir, "morl_meta.json")
+    if os.path.exists(meta_path):
+        with open(meta_path, "r") as f:
+            meta = cast(dict[str, Any], json.load(f))
+        seed = int(meta.get("seed", 0))
+    return actor, seed
+
+
+def evaluate_morl_weight_on_split(
     contract_dir: str,
     morl_model_dir: str,
     morl_cfg_path: str,
-    out_dir: str,
+    split: str,
+    w: Sequence[float],
 ) -> dict[str, Any]:
-    os.makedirs(out_dir, exist_ok=True)
-
     morl_cfg = _load_morl_cfg(morl_cfg_path)
     k = int(morl_cfg.get("k_objectives", 3))
     objectives = parse_objectives(cast(list[dict[str, object]], morl_cfg.get("objectives", [])))
@@ -151,53 +174,75 @@ def run_morl_weight_sweep(
 
     train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
     hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
+    actor, seed = _load_actor(morl_model_dir=morl_model_dir, hidden=hidden, k_objectives=k)
 
-    actor = PreferenceConditionedActor(state_dim=128, k_objectives=k, hidden=hidden, action_dim=2)
-    actor_path = os.path.join(morl_model_dir, "actor.pt")
-    actor.load_state_dict(torch.load(actor_path, map_location="cpu"))
-    actor.eval()
+    x_split, y_split = _load_contract_split(contract_dir, split)
+    w_arr = normalize_weight_grid([list(w)], k)[0]
+
+    with torch.no_grad():
+        states = torch.tensor(x_split, dtype=torch.float32)
+        w_rep = np.repeat(w_arr[None, :], x_split.shape[0], axis=0).astype(np.float32)
+        w_t = torch.tensor(w_rep, dtype=torch.float32)
+        xw = torch.cat([states, w_t], dim=1)
+        probs = actor(xw).cpu().numpy()
+        y_score = probs[:, 1].astype(np.float64)
+        actions = (y_score >= 0.5).astype(np.int_)
+
+    base_metrics = classification_metrics(y_split, y_score, threshold=0.5)
+    metrics = {
+        "precision": _safe_metric_value(base_metrics.get("precision", 0.0)),
+        "recall": _safe_metric_value(base_metrics.get("recall", 0.0)),
+        "f1": _safe_metric_value(base_metrics.get("f1", 0.0)),
+        "roc_auc": _safe_metric_value(base_metrics.get("roc_auc", 0.0)),
+        "pr_auc": _safe_metric_value(base_metrics.get("pr_auc", 0.0)),
+        "alerts_per_1k": float(1000.0 * np.mean(actions == 1)),
+    }
+    objective_names = [o.name for o in objectives]
+    reward_matrix = compute_reward_matrix(y_split, actions, objectives)
+    objective_means = {objective_names[i]: float(np.mean(reward_matrix[:, i])) for i in range(k)}
+
+    row = {
+        "w": [float(v) for v in w_arr.tolist()],
+        "weights": [float(v) for v in w_arr.tolist()],
+        "metrics": metrics,
+        "objective_means": objective_means,
+        "meta": {"seed": seed},
+    }
+    return row
+
+
+def run_morl_weight_sweep(
+    contract_dir: str,
+    morl_model_dir: str,
+    morl_cfg_path: str,
+    out_dir: str,
+    split: str = "test",
+) -> dict[str, Any]:
+    os.makedirs(out_dir, exist_ok=True)
+    if split not in {"val", "test"}:
+        raise ValueError(f"Unsupported split for MORL sweep: {split}")
+
+    morl_cfg = _load_morl_cfg(morl_cfg_path)
+    k = int(morl_cfg.get("k_objectives", 3))
+    objectives = parse_objectives(cast(list[dict[str, object]], morl_cfg.get("objectives", [])))
+    if len(objectives) != k:
+        raise ValueError(f"Expected {k} objectives, got {len(objectives)}")
 
     eval_cfg = cast(dict[str, Any], morl_cfg.get("eval", {}))
     sweep_cfg = cast(dict[str, Any], eval_cfg.get("weight_sweep", {}))
     weight_grid = normalize_weight_grid(cast(list[list[float]], sweep_cfg.get("grid", [])), k)
 
-    x_test, y_test = _load_contract_test(contract_dir)
-
     rows: list[dict[str, Any]] = []
-    objective_names = [o.name for o in objectives]
-
-    with torch.no_grad():
-        states = torch.tensor(x_test, dtype=torch.float32)
-        for w in weight_grid:
-            w_rep = np.repeat(w[None, :], x_test.shape[0], axis=0).astype(np.float32)
-            w_t = torch.tensor(w_rep, dtype=torch.float32)
-            xw = torch.cat([states, w_t], dim=1)
-            probs = actor(xw).cpu().numpy()
-            y_score = probs[:, 1].astype(np.float64)
-            actions = (y_score >= 0.5).astype(np.int_)
-
-            base_metrics = classification_metrics(y_test, y_score, threshold=0.5)
-            metrics = {
-                "precision": _safe_metric_value(base_metrics.get("precision", 0.0)),
-                "recall": _safe_metric_value(base_metrics.get("recall", 0.0)),
-                "f1": _safe_metric_value(base_metrics.get("f1", 0.0)),
-                "roc_auc": _safe_metric_value(base_metrics.get("roc_auc", 0.0)),
-                "pr_auc": _safe_metric_value(base_metrics.get("pr_auc", 0.0)),
-                "alerts_per_1k": float(1000.0 * np.mean(actions == 1)),
-            }
-
-            reward_matrix = compute_reward_matrix(y_test, actions, objectives)
-            objective_means = {
-                objective_names[i]: float(np.mean(reward_matrix[:, i])) for i in range(k)
-            }
-
-            rows.append(
-                {
-                    "weights": [float(v) for v in w.tolist()],
-                    "metrics": metrics,
-                    "objective_means": objective_means,
-                }
+    for w in weight_grid:
+        rows.append(
+            evaluate_morl_weight_on_split(
+                contract_dir=contract_dir,
+                morl_model_dir=morl_model_dir,
+                morl_cfg_path=morl_cfg_path,
+                split=split,
+                w=[float(v) for v in w.tolist()],
             )
+        )
 
     pareto_cfg = cast(dict[str, Any], eval_cfg.get("pareto", {}))
     primary_metrics = [str(v) for v in cast(list[str], pareto_cfg.get("primary_metrics", []))]
@@ -207,7 +252,6 @@ def run_morl_weight_sweep(
     pareto_rows = (
         pareto_filter(rows, primary_metrics) if bool(pareto_cfg.get("enabled", True)) else []
     )
-
     hv_cfg = cast(dict[str, Any], eval_cfg.get("hypervolume", {}))
     hv_value: float | None = None
     if bool(hv_cfg.get("enabled", True)):
@@ -215,37 +259,54 @@ def run_morl_weight_sweep(
         hv_value = hypervolume_from_rows(rows, primary_metrics, reference)
 
     payload = {
+        "split": split,
         "k_objectives": k,
-        "objective_names": objective_names,
+        "objective_names": [o.name for o in objectives],
         "primary_metrics": primary_metrics,
         "results": rows,
         "pareto": pareto_rows,
         "hypervolume": hv_value,
     }
 
-    results_path = os.path.join(out_dir, "morl_results.json")
+    results_path = os.path.join(out_dir, f"morl_results_{split}.json")
     with open(results_path, "w") as f:
         json.dump(payload, f, indent=2)
 
-    _write_csv(os.path.join(out_dir, "morl_table.csv"), rows, objective_names)
+    _write_csv(
+        os.path.join(out_dir, f"morl_table_{split}.csv"),
+        rows,
+        [o.name for o in objectives],
+    )
     _write_markdown(
-        os.path.join(out_dir, "morl.md"),
+        os.path.join(out_dir, f"morl_{split}.md"),
         rows=rows,
         pareto_rows=pareto_rows,
         objective_specs=[cast(dict[str, object], asdict(o)) for o in objectives],
         primary_metrics=primary_metrics,
         hypervolume=hv_value,
+        split=split,
     )
 
     if hv_value is not None:
-        with open(os.path.join(out_dir, "hypervolume.json"), "w") as f:
-            json.dump(
-                {
-                    "primary_metrics": primary_metrics,
-                    "value": hv_value,
-                },
-                f,
-                indent=2,
-            )
+        with open(os.path.join(out_dir, f"hypervolume_{split}.json"), "w") as f:
+            json.dump({"split": split, "primary_metrics": primary_metrics, "value": hv_value}, f, indent=2)
+
+    # Backward compatibility for existing v0.5.0 consumers expecting test filenames.
+    if split == "test":
+        with open(os.path.join(out_dir, "morl_results.json"), "w") as f:
+            json.dump(payload, f, indent=2)
+        _write_csv(os.path.join(out_dir, "morl_table.csv"), rows, [o.name for o in objectives])
+        _write_markdown(
+            os.path.join(out_dir, "morl.md"),
+            rows=rows,
+            pareto_rows=pareto_rows,
+            objective_specs=[cast(dict[str, object], asdict(o)) for o in objectives],
+            primary_metrics=primary_metrics,
+            hypervolume=hv_value,
+            split=split,
+        )
+        if hv_value is not None:
+            with open(os.path.join(out_dir, "hypervolume.json"), "w") as f:
+                json.dump({"split": split, "primary_metrics": primary_metrics, "value": hv_value}, f, indent=2)
 
     return payload
