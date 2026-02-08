@@ -14,7 +14,8 @@ from torch.optim import Adam
 
 from .buffers import concat_state_pref, iter_minibatches, select_rollout
 from .networks import PreferenceConditionedActor, PreferenceConditionedVectorCritic
-from .objectives import ObjectiveSpec, compute_reward_matrix, parse_objectives
+from .objectives import ObjectiveSpec, parse_objectives
+from .objectives_realdata import RealDataRewardResult, compute_reward_matrix_realdata_aware
 from .preferences import normalize_weight_grid, sample_dirichlet_weights
 from .types import MORLConfig, MORLRollout, MOPPOTrainConfig, PreferenceConfig
 
@@ -97,7 +98,10 @@ def _build_rollout(
     pref_weights: NDArray[np.float32],
     gamma: float,
     gae_lambda: float,
-) -> MORLRollout:
+    contract_dir: str | None,
+    split: str,
+    realdata_normalization: str,
+) -> tuple[MORLRollout, RealDataRewardResult]:
     states = torch.tensor(x_train, dtype=torch.float32)
     weights_t = torch.tensor(pref_weights, dtype=torch.float32)
     inputs = concat_state_pref(states, weights_t)
@@ -110,7 +114,15 @@ def _build_rollout(
         values = critic(inputs)
 
     actions_np = actions.cpu().numpy().astype(np.int_)
-    rewards_vec_np = compute_reward_matrix(y_train.astype(np.int_), actions_np, objectives)
+    reward_result = compute_reward_matrix_realdata_aware(
+        y_true=y_train.astype(np.int_),
+        actions=actions_np,
+        objectives=objectives,
+        contract_dir=contract_dir,
+        split=split,
+        normalization=realdata_normalization,
+    )
+    rewards_vec_np = reward_result.reward_matrix
     rewards_vec = torch.tensor(rewards_vec_np, dtype=torch.float32)
 
     dones = torch.ones((x_train.shape[0],), dtype=torch.float32)
@@ -130,7 +142,7 @@ def _build_rollout(
         advantages_vec=adv_vec,
         advantages_scalar=adv_scalar,
         returns_vec=returns_vec,
-    )
+    ), reward_result
 
 
 def _update_batch(
@@ -179,6 +191,7 @@ def train_moppo_from_arrays(
     seed: int,
     x_val: NDArray[np.float32] | None = None,
     y_val: NDArray[np.int_] | None = None,
+    contract_dir: str | None = None,
 ) -> str:
     del x_val, y_val
 
@@ -211,10 +224,16 @@ def train_moppo_from_arrays(
 
     logs: list[dict[str, float]] = []
     n = x_train.shape[0]
+    realdata_cfg = cast(dict[str, Any], raw_cfg.get("morl", {})).get("realdata_objectives", {})
+    realdata_norm = "minmax"
+    if isinstance(realdata_cfg, dict):
+        realdata_norm = str(realdata_cfg.get("normalization", "minmax"))
+    objective_source = "fallback_synthetic"
+    objective_stats: dict[str, float] = {}
 
     for epoch in range(cfg.train.epochs):
         weights = sample_dirichlet_weights(cfg.pref.dirichlet_alpha, n_samples=n, seed=seed + epoch)
-        rollout = _build_rollout(
+        rollout, reward_info = _build_rollout(
             x_train=x_train,
             y_train=y_train,
             actor=actor,
@@ -223,7 +242,12 @@ def train_moppo_from_arrays(
             pref_weights=weights,
             gamma=cfg.train.gamma,
             gae_lambda=cfg.train.gae_lambda,
+            contract_dir=contract_dir,
+            split="train",
+            realdata_normalization=realdata_norm,
         )
+        objective_source = reward_info.source
+        objective_stats = reward_info.stats
 
         rng = np.random.default_rng(seed + 1000 + epoch)
         losses: list[float] = []
@@ -267,6 +291,8 @@ def train_moppo_from_arrays(
         "action_dim": 2,
         "hidden": cfg.hidden,
         "train_samples": int(x_train.shape[0]),
+        "objective_source": objective_source,
+        "realdata_objective_stats": objective_stats,
         "config": raw_cfg,
     }
     meta_path = os.path.join(out_dir, "morl_meta.json")
