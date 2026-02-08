@@ -100,7 +100,8 @@ def _build_rollout(
     gae_lambda: float,
     contract_dir: str | None,
     split: str,
-    realdata_normalization: str,
+    normalization_cfg: dict[str, Any] | None,
+    legacy_default_norm: str,
 ) -> tuple[MORLRollout, RealDataRewardResult]:
     states = torch.tensor(x_train, dtype=torch.float32)
     weights_t = torch.tensor(pref_weights, dtype=torch.float32)
@@ -120,7 +121,8 @@ def _build_rollout(
         objectives=objectives,
         contract_dir=contract_dir,
         split=split,
-        normalization=realdata_normalization,
+        normalization_cfg=normalization_cfg,
+        legacy_default_norm=legacy_default_norm,
     )
     rewards_vec_np = reward_result.reward_matrix
     rewards_vec = torch.tensor(rewards_vec_np, dtype=torch.float32)
@@ -224,12 +226,18 @@ def train_moppo_from_arrays(
 
     logs: list[dict[str, float]] = []
     n = x_train.shape[0]
-    realdata_cfg = cast(dict[str, Any], raw_cfg.get("morl", {})).get("realdata_objectives", {})
-    realdata_norm = "minmax"
+    morl_root = cast(dict[str, Any], raw_cfg.get("morl", {}))
+    realdata_cfg = cast(dict[str, Any], morl_root.get("realdata_objectives", {}))
+    normalization_cfg_raw = morl_root.get("normalization")
+    normalization_cfg = (
+        cast(dict[str, Any], normalization_cfg_raw) if isinstance(normalization_cfg_raw, dict) else None
+    )
+    legacy_default_norm = "none"
     if isinstance(realdata_cfg, dict):
-        realdata_norm = str(realdata_cfg.get("normalization", "minmax"))
+        legacy_default_norm = str(realdata_cfg.get("normalization", "none"))
     objective_source = "fallback_synthetic"
     objective_stats: dict[str, float] = {}
+    normalization_summary: dict[str, Any] = {}
 
     for epoch in range(cfg.train.epochs):
         weights = sample_dirichlet_weights(cfg.pref.dirichlet_alpha, n_samples=n, seed=seed + epoch)
@@ -244,10 +252,12 @@ def train_moppo_from_arrays(
             gae_lambda=cfg.train.gae_lambda,
             contract_dir=contract_dir,
             split="train",
-            realdata_normalization=realdata_norm,
+            normalization_cfg=normalization_cfg,
+            legacy_default_norm=legacy_default_norm,
         )
         objective_source = reward_info.source
         objective_stats = reward_info.stats
+        normalization_summary = reward_info.normalization
 
         rng = np.random.default_rng(seed + 1000 + epoch)
         losses: list[float] = []
@@ -293,6 +303,7 @@ def train_moppo_from_arrays(
         "train_samples": int(x_train.shape[0]),
         "objective_source": objective_source,
         "realdata_objective_stats": objective_stats,
+        "normalization_summary": normalization_summary,
         "config": raw_cfg,
     }
     meta_path = os.path.join(out_dir, "morl_meta.json")

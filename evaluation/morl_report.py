@@ -201,7 +201,8 @@ def evaluate_morl_weight_on_split(
     train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
     hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
     realdata_cfg = cast(dict[str, Any], morl_cfg.get("realdata_objectives", {}))
-    realdata_normalization = str(realdata_cfg.get("normalization", "minmax"))
+    legacy_default_norm = str(realdata_cfg.get("normalization", "none"))
+    normalization_cfg = cast(dict[str, Any], morl_cfg.get("normalization", {}))
     actor, seed = _load_actor(morl_model_dir=morl_model_dir, hidden=hidden, k_objectives=k)
 
     x_split, y_split = _load_contract_split(contract_dir, split)
@@ -232,7 +233,8 @@ def evaluate_morl_weight_on_split(
         objectives=objectives,
         contract_dir=contract_dir,
         split=split,
-        normalization=realdata_normalization,
+        normalization_cfg=normalization_cfg,
+        legacy_default_norm=legacy_default_norm,
     )
     reward_matrix = reward_result.reward_matrix
     objective_means = {objective_names[i]: float(np.mean(reward_matrix[:, i])) for i in range(k)}
@@ -246,6 +248,7 @@ def evaluate_morl_weight_on_split(
             "seed": seed,
             "objective_source": reward_result.source,
             "level1_stats": reward_result.stats,
+            "normalization": reward_result.normalization,
         },
     }
     return row
