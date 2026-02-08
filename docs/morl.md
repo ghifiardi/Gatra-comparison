@@ -39,6 +39,43 @@ PYTHONPATH=. python3.11 -m runs.cli \
   --out-root reports/runs
 ```
 
+## Meta-controller (v0.5.1)
+
+The meta-controller selects a single weight vector `w*` from candidate weights
+using **VAL** results and then evaluates `w*` on **TEST**.
+
+Quick meta-selection run:
+
+```bash
+make run_meta_quick
+```
+
+Full meta-selection run:
+
+```bash
+make meta_select
+```
+
+Direct CLI equivalent:
+
+```bash
+PYTHONPATH=. python3.11 -m runs.cli \
+  --data-config configs/data.yaml \
+  --iforest-config configs/iforest.yaml \
+  --ppo-config configs/ppo.yaml \
+  --eval-config configs/eval.yaml \
+  --morl-config configs/morl.yaml \
+  --meta-config configs/meta_controller.yaml \
+  --out-root reports/runs
+```
+
+Selection methods in `configs/meta_controller.yaml`:
+
+- `greedy`: pick best feasible candidate by primary metric; tie-break by lower
+  `alerts_per_1k`, then lexicographic `w`.
+- `bandit_ucb`: deterministic seeded UCB with pseudo-noisy observations.
+- `bandit_thompson`: deterministic seeded Gaussian Thompson sampling.
+
 ## Outputs
 
 For run id `<run_id>`, MORL artifacts are written to:
@@ -48,10 +85,12 @@ For run id `<run_id>`, MORL artifacts are written to:
 
 Key files:
 
-- `morl_results.json`: metrics/objective means per weight vector.
-- `morl_table.csv`: flat table for analysis.
-- `morl.md`: summary with Pareto candidates.
-- `hypervolume.json`: dominated-volume scalar over chosen primary metrics.
+- `morl_results_val.json`: sweep results on VAL (used for meta selection).
+- `morl_results_test.json`: sweep results on TEST.
+- `morl_selected_test.json`: single TEST evaluation for selected `w*`.
+- `meta_selection.json`: selected weight + method + constraints + trace.
+- `meta_selection.md`: human-readable selection report.
+- `morl_table_test.csv` / `morl_test.md`: TEST sweep tabular/markdown summaries.
 
 ## Interpreting Pareto and Hypervolume
 
@@ -79,3 +118,5 @@ Hypervolume gives a single scalar quality summary over the evaluated set
 - MORL training/evaluation is contract-only.
 - No BigQuery calls are required by MORL tests or evaluation.
 - Existing PPO path remains available and unchanged by default.
+- Existing MORL sweep without meta-controller remains available when
+  `--meta-config` is not provided.

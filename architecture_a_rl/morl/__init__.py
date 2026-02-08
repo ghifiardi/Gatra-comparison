@@ -11,6 +11,7 @@ from .preferences import (
     normalize_weight_grid,
 )
 from .moppo import train_moppo_from_arrays, load_weight_grid_from_config
+from .meta_controller import select_weight
 from .networks import PreferenceConditionedActor, PreferenceConditionedVectorCritic
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "normalize_weight_grid",
     "train_moppo_from_arrays",
     "load_weight_grid_from_config",
+    "select_weight",
     "PreferenceConditionedActor",
     "PreferenceConditionedVectorCritic",
 ]

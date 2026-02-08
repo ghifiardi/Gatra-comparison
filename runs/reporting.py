@@ -51,6 +51,7 @@ def build_run_manifest(
     seeds: dict[str, int],
     robustness: dict[str, Any] | None = None,
     morl: dict[str, Any] | None = None,
+    meta_controller: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
     labels = data_cfg.get("labels", {})
@@ -86,6 +87,7 @@ def build_run_manifest(
         },
         "robustness": robustness or {},
         "morl": morl or {},
+        "meta_controller": meta_controller or {},
     }
     return manifest
 

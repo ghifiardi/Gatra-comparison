@@ -7,7 +7,7 @@ import subprocess
 import time
 import shutil
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import joblib
 import numpy as np
@@ -18,13 +18,15 @@ from sklearn.metrics import confusion_matrix
 
 from architecture_a_rl.networks import Actor
 from architecture_a_rl.morl.moppo import load_weight_grid_from_config, train_moppo_from_arrays
+from architecture_a_rl.morl.meta_controller import select_weight
 from architecture_a_rl.train import train_ppo_from_arrays
 from architecture_b_iforest.model import IForestModel
 from architecture_b_iforest.preprocess import Preprocessor
 from architecture_b_iforest.train import train_iforest_from_arrays
 from data.contract_export import export_frozen_contract_to_dir
 from evaluation.metrics import classification_metrics
-from evaluation.morl_report import run_morl_weight_sweep
+from evaluation.meta_selection_report import write_meta_selection_artifacts
+from evaluation.morl_report import evaluate_morl_weight_on_split, run_morl_weight_sweep
 from evaluation.robustness import run_robustness_suite
 from runs.reporting import (
     build_run_manifest,
@@ -70,6 +72,7 @@ def _snapshot_configs(
     quick: bool,
     robustness_config: str | None = None,
     morl_config: str | None = None,
+    meta_config: str | None = None,
 ) -> dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -83,6 +86,8 @@ def _snapshot_configs(
         cfgs["robustness.yaml"] = load_yaml(robustness_config)
     if morl_config:
         cfgs["morl.yaml"] = load_yaml(morl_config)
+    if meta_config:
+        cfgs["meta_controller.yaml"] = load_yaml(meta_config)
 
     if quick:
         data_cfg = cfgs["data.yaml"]
@@ -116,14 +121,19 @@ def _snapshot_configs(
         dump_yaml(dest, payload)
         paths[name] = dest
 
-    return {
+    out_paths: dict[str, str] = {
         "data": paths["data.yaml"],
         "iforest": paths["iforest.yaml"],
         "ppo": paths["ppo.yaml"],
         "eval": paths["eval.yaml"],
-        "robustness": paths.get("robustness.yaml"),
-        "morl": paths.get("morl.yaml"),
     }
+    if "robustness.yaml" in paths:
+        out_paths["robustness"] = paths["robustness.yaml"]
+    if "morl.yaml" in paths:
+        out_paths["morl"] = paths["morl.yaml"]
+    if "meta_controller.yaml" in paths:
+        out_paths["meta"] = paths["meta_controller.yaml"]
+    return out_paths
 
 
 def _load_contract_split(
@@ -235,6 +245,7 @@ def main(
     eval_config: str = "configs/eval.yaml",
     robustness_config: str | None = None,
     morl_config: str | None = None,
+    meta_config: str | None = None,
     out_root: str = "reports/runs",
     quick: bool = False,
     overwrite: bool = False,
@@ -266,6 +277,7 @@ def main(
         quick=quick,
         robustness_config=robustness_config,
         morl_config=morl_config,
+        meta_config=meta_config,
     )
 
     ppo_cfg = load_yaml(config_paths["ppo"])
@@ -297,6 +309,15 @@ def main(
     morl_weight_grid: list[list[float]] = []
     t0_morl: float | None = None
     t1_morl: float | None = None
+    meta_enabled = False
+    meta_hash: str | None = None
+    selected_weight: list[float] | None = None
+    selected_test_path: str | None = None
+    selected_test_md_path: str | None = None
+    meta_method: dict[str, Any] = {}
+    meta_constraints: dict[str, Any] = {}
+    meta_selection_path: str | None = None
+    meta_selection_md_path: str | None = None
     if config_paths.get("morl"):
         morl_cfg = load_yaml(config_paths["morl"])
         morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))
@@ -315,12 +336,52 @@ def main(
             t1_morl = time.perf_counter()
             grid = load_weight_grid_from_config(config_paths["morl"])
             morl_weight_grid = [[float(v) for v in row.tolist()] for row in grid]
+            morl_eval_dir = os.path.join(eval_dir, "morl")
             run_morl_weight_sweep(
                 contract_dir=contract_dir,
                 morl_model_dir=morl_dir,
                 morl_cfg_path=config_paths["morl"],
-                out_dir=os.path.join(eval_dir, "morl"),
+                out_dir=morl_eval_dir,
+                split="val",
             )
+            run_morl_weight_sweep(
+                contract_dir=contract_dir,
+                morl_model_dir=morl_dir,
+                morl_cfg_path=config_paths["morl"],
+                out_dir=morl_eval_dir,
+                split="test",
+            )
+
+            if config_paths.get("meta"):
+                meta_cfg = load_yaml(config_paths["meta"])
+                meta_enabled = bool(meta_cfg.get("meta_controller", {}).get("enabled", False))
+                meta_hash = file_sha256(config_paths["meta"])
+                if meta_enabled:
+                    selection = select_weight(
+                        meta_cfg_path=config_paths["meta"],
+                        morl_cfg_path=config_paths["morl"],
+                        val_results_path=os.path.join(morl_eval_dir, "morl_results_val.json"),
+                        seed=seed_value,
+                    )
+                    selected_weight = [float(v) for v in selection["selected_weight"]]
+                    meta_method = cast(dict[str, Any], selection.get("method", {}))
+                    meta_constraints = cast(dict[str, Any], selection.get("constraints", {}))
+                    selected_row = evaluate_morl_weight_on_split(
+                        contract_dir=contract_dir,
+                        morl_model_dir=morl_dir,
+                        morl_cfg_path=config_paths["morl"],
+                        split="test",
+                        w=selected_weight,
+                    )
+                    artifacts = write_meta_selection_artifacts(
+                        out_dir=morl_eval_dir,
+                        selection=selection,
+                        selected_test=selected_row,
+                    )
+                    selected_test_path = artifacts["selected_test_json"]
+                    selected_test_md_path = artifacts["selected_test_md"]
+                    meta_selection_path = artifacts["meta_selection_json"]
+                    meta_selection_md_path = artifacts["meta_selection_md"]
 
     metrics, _, thresholds = _evaluate_from_contract(
         contract_dir=contract_dir,
@@ -370,6 +431,8 @@ def main(
         config_hashes["robustness"] = file_sha256(config_paths["robustness"])
     if config_paths.get("morl"):
         config_hashes["morl"] = file_sha256(config_paths["morl"])
+    if config_paths.get("meta"):
+        config_hashes["meta_controller"] = file_sha256(config_paths["meta"])
     config_snapshot = {
         "data": os.path.relpath(config_paths["data"], run_root),
         "iforest": os.path.relpath(config_paths["iforest"], run_root),
@@ -380,6 +443,8 @@ def main(
         config_snapshot["robustness"] = os.path.relpath(config_paths["robustness"], run_root)
     if config_paths.get("morl"):
         config_snapshot["morl"] = os.path.relpath(config_paths["morl"], run_root)
+    if config_paths.get("meta"):
+        config_snapshot["meta_controller"] = os.path.relpath(config_paths["meta"], run_root)
 
     poetry_lock_hash = None
     lock_path = os.path.join(os.getcwd(), "poetry.lock")
@@ -418,6 +483,25 @@ def main(
             "model_dir": os.path.relpath(morl_dir, run_root) if morl_enabled else None,
             "train_seconds": (t1_morl - t0_morl)
             if (t0_morl is not None and t1_morl is not None)
+            else None,
+        },
+        meta_controller={
+            "enabled": meta_enabled,
+            "meta_config_hash": meta_hash,
+            "selected_weight": selected_weight,
+            "selection_method": meta_method,
+            "constraints": meta_constraints,
+            "selection_output_path": os.path.relpath(meta_selection_path, run_root)
+            if meta_selection_path
+            else None,
+            "selection_report_path": os.path.relpath(meta_selection_md_path, run_root)
+            if meta_selection_md_path
+            else None,
+            "selected_test_output_path": os.path.relpath(selected_test_path, run_root)
+            if selected_test_path
+            else None,
+            "selected_test_report_path": os.path.relpath(selected_test_md_path, run_root)
+            if selected_test_md_path
             else None,
         },
     )
