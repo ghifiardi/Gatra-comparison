@@ -34,7 +34,6 @@ MissingStrategy = Literal["mcar", "topk"]
 MissingFill = Literal["zero", "mean", "median"]
 NoiseDistribution = Literal["gaussian", "laplace"]
 LabelDelayPolicy = Literal["treat_as_benign", "treat_as_unknown", "drop"]
-AvailabilityPolicy = Literal["treat_as_benign", "treat_as_unknown"]
 
 app = typer.Typer()
 
@@ -241,9 +240,7 @@ def run_robustness_suite(
         elif kind == "label_delay":
             policy = _as_label_policy(str(v.get("policy", "treat_as_unknown")))
             if "delay" in v or "eval_time_epoch_s" in v:
-                resolved_policy = (
-                    "treat_as_unknown" if policy == "drop" else cast(AvailabilityPolicy, policy)
-                )
+                resolved_policy = "treat_as_unknown" if policy == "drop" else policy
                 y2, available_mask, meta_delay = apply_label_availability(
                     y_true=y_base.astype(np.int_),
                     event_timestamps_epoch_s=ts_base,
@@ -308,11 +305,7 @@ def run_robustness_suite(
                 elif sk == "label_delay":
                     policy = _as_label_policy(str(step.get("policy", "treat_as_unknown")))
                     if "delay" in step or "eval_time_epoch_s" in step:
-                        resolved_policy = (
-                            "treat_as_unknown"
-                            if policy == "drop"
-                            else cast(AvailabilityPolicy, policy)
-                        )
+                        resolved_policy = "treat_as_unknown" if policy == "drop" else policy
                         y, available_mask, meta_delay = apply_label_availability(
                             y_true=y.astype(np.int_),
                             event_timestamps_epoch_s=ts_base,

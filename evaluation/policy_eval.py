@@ -53,11 +53,11 @@ def _parse_cfg(path: str) -> PolicyEvalConfig:
 def _candidate_thresholds(scores: NDArray[np.float64]) -> NDArray[np.float64]:
     if scores.size == 0:
         return np.asarray([0.5], dtype=np.float64)
-    uniq = np.unique(scores)
+    uniq = cast(NDArray[np.float64], np.unique(scores).astype(np.float64))
     upper = np.nextafter(float(np.max(uniq)), float("inf"))
     lower = np.nextafter(float(np.min(uniq)), float("-inf"))
     all_vals = np.concatenate(([upper], uniq, [lower])).astype(np.float64)
-    return np.unique(all_vals)[::-1]
+    return cast(NDArray[np.float64], np.unique(all_vals)[::-1].astype(np.float64))
 
 
 def _evaluate_threshold(

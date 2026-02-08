@@ -309,6 +309,12 @@ def main(
     ppo_cfg = load_yaml(config_paths["ppo"])
     seed_value = int(ppo_cfg.get("rl", {}).get("seed", 42))
     set_global_seeds(seed_value)
+    join_meta: dict[str, Any] = {}
+    join_map_path: str | None = None
+    join_meta_path: str | None = None
+    policy_eval_summary: dict[str, Any] = {}
+    policy_eval_json_path: str | None = None
+    policy_eval_md_path: str | None = None
 
     export_frozen_contract_to_dir(
         data_cfg_path=config_paths["data"],
@@ -355,12 +361,6 @@ def main(
     meta_constraints: dict[str, Any] = {}
     meta_selection_path: str | None = None
     meta_selection_md_path: str | None = None
-    join_meta: dict[str, Any] = {}
-    join_map_path: str | None = None
-    join_meta_path: str | None = None
-    policy_eval_summary: dict[str, Any] = {}
-    policy_eval_json_path: str | None = None
-    policy_eval_md_path: str | None = None
     if config_paths.get("morl"):
         morl_cfg = load_yaml(config_paths["morl"])
         morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))

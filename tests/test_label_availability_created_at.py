@@ -40,7 +40,7 @@ def test_created_at_gating_treat_as_benign_and_metrics_ignore_unknown() -> None:
         eval_time_epoch_s=400,
     )
     scores = np.asarray([0.9, 0.1, 0.8, 0.7], dtype=np.float64)
-    m_unknown = classification_metrics(y_unknown, scores, threshold=0.5)
+    m_unknown = classification_metrics(y_unknown.astype(np.int_), scores, threshold=0.5)
     m_trimmed = classification_metrics(y[:3], scores[:3], threshold=0.5)
     assert m_unknown["f1"] == m_trimmed["f1"]
     assert m_unknown["pr_auc"] == m_trimmed["pr_auc"]

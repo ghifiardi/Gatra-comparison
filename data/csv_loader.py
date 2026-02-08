@@ -3,9 +3,9 @@ from __future__ import annotations
 import csv
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from .schemas import Label, RawEvent
+from .schemas import Label, LabelType, RawEvent
 
 
 def _resolve_path(data_cfg_path: str, maybe_rel_path: str) -> Path:
@@ -55,10 +55,10 @@ def _parse_epoch_or_datetime(raw: str, key_name: str) -> int:
     return int(dt.timestamp())
 
 
-def _label_from_text(raw: str | None, case_class: str | None) -> str:
+def _label_from_text(raw: str | None, case_class: str | None) -> LabelType:
     normalized = (raw or "").strip().lower()
     if normalized in {"threat", "benign", "unknown"}:
-        return normalized
+        return cast(LabelType, normalized)
     if (case_class or "").strip():
         return "threat"
     return "unknown"

@@ -33,13 +33,15 @@ def _load_yaml(path: str) -> dict[str, Any]:
 def _load_str(path: str, fallback_len: int = 0) -> NDArray[np.str_]:
     if not os.path.exists(path):
         return np.asarray([""] * fallback_len, dtype=np.str_)
-    return np.load(path, allow_pickle=False).astype(np.str_)
+    loaded = np.load(path, allow_pickle=False).astype(np.str_)
+    return cast(NDArray[np.str_], loaded)
 
 
 def _load_i64(path: str, fallback_len: int = 0) -> NDArray[np.int64]:
     if not os.path.exists(path):
         return np.zeros((fallback_len,), dtype=np.int64)
-    return np.load(path, allow_pickle=False).astype(np.int64)
+    loaded = np.load(path, allow_pickle=False).astype(np.int64)
+    return cast(NDArray[np.int64], loaded)
 
 
 def _parse_join_config(path: str) -> JoinConfig:
