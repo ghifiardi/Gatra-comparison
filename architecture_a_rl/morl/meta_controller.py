@@ -72,7 +72,7 @@ def _to_optional_float(value: object) -> float | None:
 
 
 def _weight_key(w: Sequence[float]) -> tuple[float, ...]:
-    return tuple(round(float(v), 8) for v in w)
+    return tuple(round(float(v), 6) for v in w)
 
 
 def _load_yaml_mapping(path: str) -> dict[str, Any]:
