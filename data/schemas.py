@@ -26,6 +26,7 @@ class RawEvent(BaseModel):
     action: Optional[str] = None
     page: Optional[str] = None
     details: Optional[str] = None
+    alarm_id: Optional[str] = None
 
 
 class Label(BaseModel):
@@ -33,3 +34,6 @@ class Label(BaseModel):
     label: LabelType = Field(default="unknown")
     severity: float = Field(default=0.0, ge=0.0, le=1.0)
     source: str = "unknown"
+    alarm_id: Optional[str] = None
+    row_key: Optional[str] = None
+    label_created_at_epoch_s: Optional[int] = None
