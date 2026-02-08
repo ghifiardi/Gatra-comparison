@@ -6,13 +6,23 @@ morl:
     - name: time_to_triage_seconds
       type: time_to_triage_seconds
       direction: minimize
-      norm: none
+      norm: log1p_zscore
+      cap_pctl: 0.99
       ttt_alert_penalty: -1.0
+
     - name: detection_coverage
       type: detection_coverage
       direction: maximize
-      norm: none
+      norm: rate_per_1k_zscore
+      cap_pctl: 0.99
       coverage_alert_reward: 1.0
+
+  normalization:
+    reference_split: val
+    apply_to: [val, test]
+    eps: 1e-8
+    clip_z: 5.0
+    persist: true
 
   realdata_objectives:
     enabled: true
