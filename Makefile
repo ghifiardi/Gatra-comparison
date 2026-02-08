@@ -1,6 +1,6 @@
 PY ?= python3.11
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick
 
 format:
 	@$(PY) -m ruff format .
@@ -86,6 +86,27 @@ run_morl_quick:
 	  --ppo-config configs/ppo.yaml \
 	  --eval-config configs/eval.yaml \
 	  --morl-config configs/morl.yaml \
+	  --out-root reports/runs \
+	  --quick
+
+meta_select:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --morl-config configs/morl.yaml \
+	  --meta-config configs/meta_controller.yaml \
+	  --out-root reports/runs
+
+run_meta_quick:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config configs/data.yaml \
+	  --iforest-config configs/iforest.yaml \
+	  --ppo-config configs/ppo.yaml \
+	  --eval-config configs/eval.yaml \
+	  --morl-config configs/morl.yaml \
+	  --meta-config configs/meta_controller.yaml \
 	  --out-root reports/runs \
 	  --quick
 
