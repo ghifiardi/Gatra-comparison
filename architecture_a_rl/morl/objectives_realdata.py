@@ -217,7 +217,9 @@ def _build_reference_stats(
     norm_cfg: NormalizationSpec,
     legacy_default_norm: str,
 ) -> dict[str, NormalizationStats]:
-    ttt_ref, cov_ref, session_sizes_ref = _load_split_signals(contract_dir, norm_cfg.reference_split)
+    ttt_ref, cov_ref, session_sizes_ref = _load_split_signals(
+        contract_dir, norm_cfg.reference_split
+    )
     stats: dict[str, NormalizationStats] = {}
     for spec in objectives:
         if spec.type not in _REALDATA_TYPES:
@@ -404,7 +406,9 @@ def compute_reward_matrix_realdata_aware(
             and expected_len > 0
         ):
             stat = ref_stats[spec.name]
-            base = _preprocess_for_norm(raw_signal, norm_name=n_spec.norm, denom_events=session_sizes)
+            base = _preprocess_for_norm(
+                raw_signal, norm_name=n_spec.norm, denom_events=session_sizes
+            )
             base = _apply_cap(base, stat.cap_value)
             used_signal = apply_zscore(base, mean=stat.mean, std=stat.std, clip_z=norm_cfg.clip_z)
             normalization_applied = True
@@ -426,7 +430,9 @@ def compute_reward_matrix_realdata_aware(
     }
     for i, spec in enumerate(objectives):
         if spec.type == _TIME_TO_TRIAGE:
-            stats["ttt_norm_median_z"] = float(np.median(signals_used[:, i])) if expected_len else 0.0
+            stats["ttt_norm_median_z"] = (
+                float(np.median(signals_used[:, i])) if expected_len else 0.0
+            )
             stats["ttt_norm_p90_z"] = (
                 float(np.percentile(signals_used[:, i], 90)) if expected_len else 0.0
             )

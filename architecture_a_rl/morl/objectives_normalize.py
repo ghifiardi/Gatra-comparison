@@ -77,7 +77,9 @@ def log1p_then_zscore(
     return apply_zscore(xp, mean=mean, std=std, clip_z=clip_z)
 
 
-def rate_per_1k(x_counts: NDArray[np.float32], denom_events: NDArray[np.float32]) -> NDArray[np.float32]:
+def rate_per_1k(
+    x_counts: NDArray[np.float32], denom_events: NDArray[np.float32]
+) -> NDArray[np.float32]:
     if x_counts.shape != denom_events.shape:
         raise ValueError("x_counts and denom_events must have identical shape")
     denom = np.maximum(denom_events, np.float32(1.0))

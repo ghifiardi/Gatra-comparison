@@ -17,7 +17,9 @@ def _write_split_arrays(
     action: list[str],
 ) -> None:
     np.save(contract_dir / f"session_id_{split}.npy", np.asarray(session_id, dtype=np.str_))
-    np.save(contract_dir / f"timestamps_epoch_s_{split}.npy", np.asarray(timestamps, dtype=np.int64))
+    np.save(
+        contract_dir / f"timestamps_epoch_s_{split}.npy", np.asarray(timestamps, dtype=np.int64)
+    )
     np.save(contract_dir / f"page_{split}.npy", np.asarray(page, dtype=np.str_))
     np.save(contract_dir / f"action_{split}.npy", np.asarray(action, dtype=np.str_))
 

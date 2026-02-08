@@ -230,7 +230,9 @@ def train_moppo_from_arrays(
     realdata_cfg = cast(dict[str, Any], morl_root.get("realdata_objectives", {}))
     normalization_cfg_raw = morl_root.get("normalization")
     normalization_cfg = (
-        cast(dict[str, Any], normalization_cfg_raw) if isinstance(normalization_cfg_raw, dict) else None
+        cast(dict[str, Any], normalization_cfg_raw)
+        if isinstance(normalization_cfg_raw, dict)
+        else None
     )
     legacy_default_norm = "none"
     if isinstance(realdata_cfg, dict):

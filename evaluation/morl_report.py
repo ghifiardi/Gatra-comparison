@@ -94,7 +94,9 @@ def _write_markdown(
     normalization_summary: dict[str, Any],
 ) -> None:
     normalization_applied = bool(normalization_summary.get("applied", False))
-    signals_used = "normalized objective signals" if normalization_applied else "raw objective signals"
+    signals_used = (
+        "normalized objective signals" if normalization_applied else "raw objective signals"
+    )
     lines = [
         "# MORL Evaluation Summary",
         "",
