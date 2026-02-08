@@ -107,7 +107,7 @@ def _load_str_array(contract_dir: str, stem: str, split: str) -> NDArray[np.str_
     if not os.path.exists(path):
         raise FileNotFoundError(path)
     loaded = np.load(path, allow_pickle=False)
-    return loaded.astype(np.str_)
+    return cast(NDArray[np.str_], loaded.astype(np.str_))
 
 
 def _load_i64_array(contract_dir: str, stem: str, split: str) -> NDArray[np.int64]:
@@ -115,7 +115,7 @@ def _load_i64_array(contract_dir: str, stem: str, split: str) -> NDArray[np.int6
     if not os.path.exists(path):
         raise FileNotFoundError(path)
     loaded = np.load(path, allow_pickle=False)
-    return loaded.astype(np.int64)
+    return cast(NDArray[np.int64], loaded.astype(np.int64))
 
 
 def _load_meta_source(contract_dir: str) -> str:
