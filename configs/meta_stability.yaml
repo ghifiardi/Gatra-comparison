@@ -1,0 +1,99 @@
+meta_stability:
+  objective_primary: pr_auc
+  objective_tie_breaker: alerts_per_1k
+  utility:
+    pr_auc: 1.0
+    alerts_per_1k: -0.01
+
+  constraints:
+    mode: hard
+    alerts_per_1k_max: 30.0
+    recall_min: 0.60
+    precision_min: null
+    pr_auc_min: null
+    soft_penalty:
+      lambda_recall: 5.0
+      lambda_alerts: 0.05
+      lambda_precision: 1.0
+      lambda_pr_auc: 1.0
+
+  relaxation:
+    enabled: true
+    stop_on_first_feasible: true
+    schedule:
+      - { recall_min: 0.55, alerts_per_1k_max: 50.0 }
+      - { recall_min: 0.50, alerts_per_1k_max: 80.0 }
+      - { recall_min: 0.40, alerts_per_1k_max: 120.0 }
+
+  fail_on_infeasible: false
+
+  method:
+    name: greedy
+    params:
+      rounds: 20
+      explore_frac: 0.2
+      ucb_c: 1.0
+      thompson_sigma: 0.05
+
+  conditions:
+    - name: missing_mcar_20
+      kind: robustness
+      overrides:
+        recall_scale: 0.85
+        precision_scale: 0.90
+        alerts_scale: 1.15
+        seed: 100
+
+    - name: noise_medium
+      kind: robustness
+      overrides:
+        noise_sigma: 0.02
+        seed: 101
+
+    - name: time_slice_early
+      kind: robustness
+      overrides:
+        recall_scale: 0.90
+        pr_auc_scale: 0.92
+        seed: 102
+
+    - name: time_slice_late
+      kind: robustness
+      overrides:
+        recall_scale: 1.05
+        pr_auc_scale: 1.03
+        alerts_scale: 0.90
+        seed: 103
+
+    - name: label_delay_1d
+      kind: label_availability
+      overrides:
+        recall_scale: 0.95
+        seed: 104
+
+    - name: label_delay_7d
+      kind: label_availability
+      overrides:
+        recall_scale: 0.80
+        precision_scale: 0.85
+        seed: 105
+
+    - name: alert_budget_10
+      kind: policy_regime
+      overrides:
+        alerts_scale: 0.33
+        recall_scale: 0.70
+        seed: 106
+
+    - name: alert_budget_20
+      kind: policy_regime
+      overrides:
+        alerts_scale: 0.67
+        recall_scale: 0.85
+        seed: 107
+
+    - name: alert_budget_30
+      kind: policy_regime
+      overrides:
+        alerts_scale: 1.0
+        seed: 108
