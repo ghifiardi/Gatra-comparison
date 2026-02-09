@@ -21,3 +21,13 @@ reports/
 # Office temp/lock files
 docs/~$*.docx
 ~$*.docx
+
+# local-only / developer tooling
+.agents/
+claude_tasks/
+data/local/
+
+# local-only / developer tooling
+.agents/
+claude_tasks/
+data/local/
