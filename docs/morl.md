@@ -65,16 +65,19 @@ PYTHONPATH=. python3.11 -m runs.cli \
   --ppo-config configs/ppo.yaml \
   --eval-config configs/eval.yaml \
   --morl-config configs/morl.yaml \
-  --meta-config configs/meta_controller.yaml \
+  --meta-config configs/meta_controller_relaxed.yaml \
   --out-root reports/runs
 ```
 
-Selection methods in `configs/meta_controller.yaml`:
+Selection methods in `configs/meta_controller_relaxed.yaml` (default via Makefile):
 
 - `greedy`: pick best feasible candidate by primary metric; tie-break by lower
   `alerts_per_1k`, then lexicographic `w`.
 - `bandit_ucb`: deterministic seeded UCB with pseudo-noisy observations.
 - `bandit_thompson`: deterministic seeded Gaussian Thompson sampling.
+
+Strict override is available with `configs/meta_controller.yaml` when you want hard
+constraint behavior without the relaxed fallback schedule.
 
 ### When constraints are infeasible (v0.5.2)
 
@@ -128,7 +131,7 @@ PYTHONPATH=. python3.11 -m runs.cli \
   --ppo-config configs/ppo.yaml \
   --eval-config configs/eval.yaml \
   --morl-config configs/morl_realdata.yaml \
-  --meta-config configs/meta_controller.yaml \
+  --meta-config configs/meta_controller_relaxed.yaml \
   --out-root reports/runs \
   --quick
 ```
@@ -219,6 +222,22 @@ Combined quick run (MORL + meta selection + join diagnostics + policy eval):
 make run_morl_policy_quick
 ```
 
+Production default (Option 2) for local CSV:
+
+```bash
+make run_morl_policy_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  META_CONFIG=configs/meta_controller_relaxed.yaml
+```
+
+Strict override:
+
+```bash
+make run_morl_policy_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  META_CONFIG=configs/meta_controller.yaml
+```
+
 Policy outputs:
 
 - `reports/runs/<run_id>/eval/policy/policy_eval.json`
@@ -257,6 +276,13 @@ Join diagnostics are config-driven via `configs/join.yaml` and write:
 
 Default join priority is `alarm_id > row_key > time_window` with time-window
 fallback disabled unless explicitly enabled.
+
+### Data reality note (single-class TEST splits)
+
+- If TEST has only one class, ROC-AUC/PR metrics can be undefined and emit warnings.
+- This is expected for narrow windows or aggressive delay gating, not a pipeline failure.
+- Prefer policy-budget metrics and objective summaries for operational comparisons.
+- If needed, adjust split windows or label availability policy to increase positives in TEST.
 
 ## Constraints
 

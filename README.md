@@ -32,6 +32,34 @@ Operational policy evaluation + join diagnostics quick run:
 make run_morl_policy_quick
 ```
 
+## Production Default (Option 2)
+
+Production-default path uses relaxed meta-controller fallback and contract cache.
+For local CSV data (no BigQuery auth required), run:
+
+```bash
+make run_morl_policy_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  META_CONFIG=configs/meta_controller_relaxed.yaml \
+  CONTRACT_CACHE_ROOT=reports/contracts_cache
+```
+
+Strict override (for explicit hard-constraint behavior):
+
+```bash
+make run_morl_policy_quick \
+  DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  META_CONFIG=configs/meta_controller.yaml
+```
+
+Inspect these artifacts when fallback triggers:
+- `reports/runs/<run_id>/eval/morl/meta_selection.json`
+- `reports/runs/<run_id>/eval/morl/meta_feasibility.json`
+- `reports/runs/<run_id>/eval/morl/morl_selected_test.json`
+
+Additional guidance:
+- `docs/v0.10_option2_production_default.md`
+
 By default, uses a toy dataset generator (configs/data.yaml: dataset.source=toy).
 Replace data loader in data/loaders.py to read parquet/csv/bq.
 
