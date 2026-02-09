@@ -31,3 +31,9 @@ data/local/
 .agents/
 claude_tasks/
 data/local/
+
+# Local agent task specs (not shipped)
+codex_tasks/
+claude_tasks/
+.agents/
+data/local/
