@@ -18,7 +18,7 @@ meta_controller:
       alerts_per_1k: -0.01
 
   constraints:
-    mode: hard          # hard | soft
+    mode: hard
     alerts_per_1k_max: 30.0
     recall_min: 0.60
     precision_min: null
@@ -33,8 +33,8 @@ meta_controller:
     enabled: true
     stop_on_first_feasible: true
     schedule:
-      - { recall_min: 0.55, alerts_per_1k_max: 40.0 }
-      - { recall_min: 0.50, alerts_per_1k_max: 60.0 }
+      - { recall_min: 0.55, alerts_per_1k_max: 50.0 }
+      - { recall_min: 0.50, alerts_per_1k_max: 80.0 }
       - { recall_min: 0.40, alerts_per_1k_max: 120.0 }
 
   method:

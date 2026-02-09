@@ -76,6 +76,31 @@ Selection methods in `configs/meta_controller.yaml`:
 - `bandit_ucb`: deterministic seeded UCB with pseudo-noisy observations.
 - `bandit_thompson`: deterministic seeded Gaussian Thompson sampling.
 
+### When constraints are infeasible (v0.5.2)
+
+On small or heavily imbalanced datasets, strict constraints can produce zero feasible
+weights. v0.5.2 adds deterministic fallback handling so runs do not fail by default:
+
+- `constraints.mode: hard | soft`
+- `relaxation.enabled: true | false`
+- ordered `relaxation.schedule` steps to progressively relax constraints
+- `fail_on_infeasible: false` (default) keeps pipeline running and emits diagnostics
+
+Behavior:
+
+1. Try original constraints.
+2. If none feasible, apply relaxation steps in order.
+3. If still none feasible, select best-effort candidate using penalty-based soft scoring.
+
+Artifacts written under `eval/morl/`:
+
+- `meta_selection.json`
+- `meta_feasibility.json`
+- `meta_selection.md`
+
+`meta_feasibility.json` includes feasible counts per relax step, fallback mode, final
+constraints used, and violated-constraint summary for auditability.
+
 ## Real-data objectives (v0.6)
 
 `configs/morl_realdata.yaml` adds Level-1 objectives derived from contract arrays:
