@@ -35,11 +35,21 @@ make run_morl_policy_quick
 ## Production Default (Option 2)
 
 Production-default path uses relaxed meta-controller fallback and contract cache.
-For local CSV data (no BigQuery auth required), run:
+
+Operator quickstart (local CSV, no BigQuery auth required):
 
 ```bash
 make run_morl_policy_quick \
   DATA_CONFIG=configs/data_local_gatra_prd_c335.yaml \
+  META_CONFIG=configs/meta_controller_relaxed.yaml \
+  CONTRACT_CACHE_ROOT=reports/contracts_cache
+```
+
+Operator quickstart (BigQuery source, requires ADC/service-account auth):
+
+```bash
+make run_morl_policy_quick \
+  DATA_CONFIG=configs/data.yaml \
   META_CONFIG=configs/meta_controller_relaxed.yaml \
   CONTRACT_CACHE_ROOT=reports/contracts_cache
 ```
@@ -52,10 +62,16 @@ make run_morl_policy_quick \
   META_CONFIG=configs/meta_controller.yaml
 ```
 
-Inspect these artifacts when fallback triggers:
+Artifact contract (minimum expected outputs for `run_morl_policy_quick`):
 - `reports/runs/<run_id>/eval/morl/meta_selection.json`
 - `reports/runs/<run_id>/eval/morl/meta_feasibility.json`
 - `reports/runs/<run_id>/eval/morl/morl_selected_test.json`
+- `reports/runs/<run_id>/report/run_manifest.json`
+
+If these are missing, likely causes:
+- The run used a different `run_id` than expected.
+- The run exited before meta-selection (check terminal output for first error).
+- `--morl-config` / `--meta-config` was overridden to disable meta-controller behavior.
 
 Additional guidance:
 - `docs/v0.10_option2_production_default.md`
