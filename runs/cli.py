@@ -23,6 +23,7 @@ from architecture_a_rl.train import train_ppo_from_arrays
 from architecture_b_iforest.model import IForestModel
 from architecture_b_iforest.preprocess import Preprocessor
 from architecture_b_iforest.train import train_iforest_from_arrays
+from data.contract_cache import copy_contract, get_or_populate_cache
 from data.contract_export import export_frozen_contract_to_dir
 from data.join import build_join_map
 from evaluation.metrics import classification_metrics
@@ -277,6 +278,8 @@ def main(
     join_config: str | None = None,
     policy_eval_config: str | None = None,
     meta_stability_config: str | None = None,
+    contract_dir_input: str | None = None,
+    cache_root: str = "reports/contracts_cache",
     out_root: str = "reports/runs",
     quick: bool = False,
     overwrite: bool = False,
@@ -288,7 +291,7 @@ def main(
         if not overwrite:
             raise typer.BadParameter(f"Run already exists: {run_root} (use --overwrite)")
         shutil.rmtree(run_root)
-    contract_dir = os.path.join(run_root, "contract")
+    run_contract_dir = os.path.join(run_root, "contract")
     iforest_dir = os.path.join(run_root, "models", "iforest")
     ppo_dir = os.path.join(run_root, "models", "ppo")
     morl_dir = os.path.join(run_root, "models", "morl")
@@ -296,7 +299,15 @@ def main(
     report_dir = os.path.join(run_root, "report")
     config_dir = os.path.join(run_root, "config")
 
-    for path in (contract_dir, iforest_dir, ppo_dir, morl_dir, eval_dir, report_dir, config_dir):
+    for path in (
+        run_contract_dir,
+        iforest_dir,
+        ppo_dir,
+        morl_dir,
+        eval_dir,
+        report_dir,
+        config_dir,
+    ):
         os.makedirs(path, exist_ok=True)
 
     config_paths = _snapshot_configs(
@@ -324,12 +335,34 @@ def main(
     policy_eval_json_path: str | None = None
     policy_eval_md_path: str | None = None
 
-    export_frozen_contract_to_dir(
-        data_cfg_path=config_paths["data"],
-        out_dir=contract_dir,
-        include_splits=True,
-        contract_id=run_id,
-    )
+    contract_source_dir: str | None = None
+    contract_cache_hit: bool = False
+    if contract_dir_input is not None:
+        contract_source_dir = os.path.abspath(contract_dir_input)
+        copy_contract(contract_source_dir, run_contract_dir)
+        contract_cache_hit = True
+        typer.echo(f"Resume: reusing contract from {contract_source_dir}")
+    else:
+
+        def _do_export(cfg_path: str, out: str) -> None:
+            export_frozen_contract_to_dir(
+                data_cfg_path=cfg_path,
+                out_dir=out,
+                include_splits=True,
+                contract_id=run_id,
+            )
+
+        cached_dir, contract_cache_hit = get_or_populate_cache(
+            data_cfg_path=config_paths["data"],
+            cache_root=cache_root,
+            export_fn=_do_export,
+        )
+        if contract_cache_hit:
+            typer.echo(f"Cache hit: reusing contract from {cached_dir}")
+        else:
+            typer.echo(f"Cache miss: exported contract to {cached_dir}")
+        copy_contract(cached_dir, run_contract_dir)
+    contract_dir = run_contract_dir
 
     if config_paths.get("join"):
         join_out_dir = os.path.join(eval_dir, "join")
@@ -589,6 +622,10 @@ def main(
         poetry_lock_hash=poetry_lock_hash,
         contract_id=run_id,
         contract_meta=contract_meta,
+        contract_cache={
+            "cache_hit": contract_cache_hit,
+            "contract_source_dir": contract_source_dir,
+        },
         mode="quick" if quick else "full",
         seeds={
             "python": seed_value,
