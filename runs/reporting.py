@@ -55,7 +55,6 @@ def build_run_manifest(
     join_diagnostics: dict[str, Any] | None = None,
     policy_eval: dict[str, Any] | None = None,
     meta_stability: dict[str, Any] | None = None,
-    contract_cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
     labels = data_cfg.get("labels", {})
@@ -84,7 +83,6 @@ def build_run_manifest(
             "counts": contract_meta.get("counts", {}),
             "label_pos_rate": contract_meta.get("label_pos_rate", {}),
             "splits": contract_meta.get("splits", {}),
-            **(contract_cache or {}),
         },
         "environment": {
             "python_version": sys.version.split()[0],

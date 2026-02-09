@@ -1,10 +1,3 @@
-## v0.9
-- Contract cache: skip re-export when data config unchanged (keyed by config content hash)
-- Resume mode: `--contract-dir-input` reuses a pre-built contract directory
-- Cache directory: `reports/contracts_cache/<key>/contract`
-- Manifest records `cache_hit` and `contract_source_dir` in contract section
-- Tests: test_contract_cache.py (cache miss/hit, copy, key determinism)
-
 ## v0.8
 - Meta-selection stability suite: replay meta-controller across conditions
 - Conditions: robustness variants, label availability delays, policy regimes
