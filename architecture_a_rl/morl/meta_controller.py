@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from math import isclose
 from typing import Any, Literal, Sequence, cast
@@ -12,14 +12,40 @@ from numpy.typing import NDArray
 from .preferences import normalize_weight_grid
 
 MethodName = Literal["greedy", "bandit_ucb", "bandit_thompson"]
+ConstraintMode = Literal["hard", "soft"]
+
+
+@dataclass(frozen=True)
+class SoftPenaltyConfig:
+    lambda_recall: float
+    lambda_alerts: float
+    lambda_precision: float
+    lambda_pr_auc: float
 
 
 @dataclass(frozen=True)
 class ConstraintConfig:
+    mode: ConstraintMode
     alerts_per_1k_max: float | None
     recall_min: float | None
     precision_min: float | None
     pr_auc_min: float | None
+    soft_penalty: SoftPenaltyConfig
+
+
+@dataclass(frozen=True)
+class RelaxationStep:
+    alerts_per_1k_max: float | None
+    recall_min: float | None
+    precision_min: float | None
+    pr_auc_min: float | None
+
+
+@dataclass(frozen=True)
+class RelaxationConfig:
+    enabled: bool
+    schedule: list[RelaxationStep]
+    stop_on_first_feasible: bool
 
 
 @dataclass(frozen=True)
@@ -46,6 +72,8 @@ class MetaControllerConfig:
     candidate_explicit: list[list[float]]
     objective: ObjectiveConfig
     constraints: ConstraintConfig
+    relaxation: RelaxationConfig
+    fail_on_infeasible: bool
     method: MethodConfig
 
 
@@ -55,6 +83,12 @@ class CandidateRow:
     metrics: dict[str, float]
     objective_means: dict[str, float]
     meta: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class SelectionOutcome:
+    selected_index: int
+    trace: list[dict[str, Any]]
 
 
 def _to_float(value: object) -> float:
@@ -83,6 +117,13 @@ def _load_yaml_mapping(path: str) -> dict[str, Any]:
     return cast(dict[str, Any], raw)
 
 
+def _parse_constraint_mode(raw: object) -> ConstraintMode:
+    mode = str(raw if raw is not None else "hard")
+    if mode not in {"hard", "soft"}:
+        raise ValueError(f"Unsupported constraints.mode: {mode}")
+    return cast(ConstraintMode, mode)
+
+
 def _load_meta_config(path: str) -> MetaControllerConfig:
     root = _load_yaml_mapping(path)
     mc = cast(dict[str, Any], root.get("meta_controller", {}))
@@ -91,10 +132,24 @@ def _load_meta_config(path: str) -> MetaControllerConfig:
     constraints_raw = cast(dict[str, Any], mc.get("constraints", {}))
     objective_raw = cast(dict[str, Any], mc.get("objective", {}))
     candidates_raw = cast(dict[str, Any], mc.get("candidates", {}))
+    relaxation_raw = cast(dict[str, Any], mc.get("relaxation", {}))
+    penalty_raw = cast(dict[str, Any], constraints_raw.get("soft_penalty", {}))
+    relax_schedule_raw = cast(list[dict[str, object]], relaxation_raw.get("schedule", []))
 
     name = str(method_raw.get("name", "greedy"))
     if name not in {"greedy", "bandit_ucb", "bandit_thompson"}:
         raise ValueError(f"Unsupported meta-controller method: {name}")
+
+    schedule: list[RelaxationStep] = []
+    for item in relax_schedule_raw:
+        schedule.append(
+            RelaxationStep(
+                alerts_per_1k_max=_to_optional_float(item.get("alerts_per_1k_max")),
+                recall_min=_to_optional_float(item.get("recall_min")),
+                precision_min=_to_optional_float(item.get("precision_min")),
+                pr_auc_min=_to_optional_float(item.get("pr_auc_min")),
+            )
+        )
 
     return MetaControllerConfig(
         enabled=bool(mc.get("enabled", False)),
@@ -113,11 +168,24 @@ def _load_meta_config(path: str) -> MetaControllerConfig:
             },
         ),
         constraints=ConstraintConfig(
+            mode=_parse_constraint_mode(constraints_raw.get("mode", "hard")),
             alerts_per_1k_max=_to_optional_float(constraints_raw.get("alerts_per_1k_max")),
             recall_min=_to_optional_float(constraints_raw.get("recall_min")),
             precision_min=_to_optional_float(constraints_raw.get("precision_min")),
             pr_auc_min=_to_optional_float(constraints_raw.get("pr_auc_min")),
+            soft_penalty=SoftPenaltyConfig(
+                lambda_recall=float(penalty_raw.get("lambda_recall", 5.0)),
+                lambda_alerts=float(penalty_raw.get("lambda_alerts", 0.05)),
+                lambda_precision=float(penalty_raw.get("lambda_precision", 1.0)),
+                lambda_pr_auc=float(penalty_raw.get("lambda_pr_auc", 1.0)),
+            ),
         ),
+        relaxation=RelaxationConfig(
+            enabled=bool(relaxation_raw.get("enabled", False)),
+            schedule=schedule,
+            stop_on_first_feasible=bool(relaxation_raw.get("stop_on_first_feasible", True)),
+        ),
+        fail_on_infeasible=bool(mc.get("fail_on_infeasible", False)),
         method=MethodConfig(
             name=cast(MethodName, name),
             rounds=int(params.get("rounds", 20)),
@@ -176,34 +244,65 @@ def score_candidate(metrics: dict[str, float], objective: ObjectiveConfig) -> fl
     return float(metrics.get(objective.primary, float("-inf")))
 
 
-def _constraint_violation_score(row: CandidateRow, c: ConstraintConfig) -> float:
+def _constraints_to_dict(c: ConstraintConfig) -> dict[str, float | str | None]:
+    return {
+        "mode": c.mode,
+        "alerts_per_1k_max": c.alerts_per_1k_max,
+        "recall_min": c.recall_min,
+        "precision_min": c.precision_min,
+        "pr_auc_min": c.pr_auc_min,
+    }
+
+
+def _safe_denom(v: float | None) -> float:
+    if v is None:
+        return 1.0
+    return max(abs(float(v)), 1e-6)
+
+
+def _constraint_violations(
+    row: CandidateRow, c: ConstraintConfig
+) -> dict[str, dict[str, float | bool]]:
     m = row.metrics
-    score = 0.0
+    out: dict[str, dict[str, float | bool]] = {}
     if c.alerts_per_1k_max is not None:
-        score += max(0.0, m.get("alerts_per_1k", float("inf")) - c.alerts_per_1k_max)
+        raw = max(0.0, m.get("alerts_per_1k", float("inf")) - c.alerts_per_1k_max)
+        out["alerts_per_1k_max"] = {
+            "violated": raw > 0.0,
+            "raw": float(raw),
+            "normalized": float(raw / _safe_denom(c.alerts_per_1k_max)),
+        }
     if c.recall_min is not None:
-        score += max(0.0, c.recall_min - m.get("recall", 0.0))
+        raw = max(0.0, c.recall_min - m.get("recall", 0.0))
+        out["recall_min"] = {
+            "violated": raw > 0.0,
+            "raw": float(raw),
+            "normalized": float(raw / _safe_denom(c.recall_min)),
+        }
     if c.precision_min is not None:
-        score += max(0.0, c.precision_min - m.get("precision", 0.0))
+        raw = max(0.0, c.precision_min - m.get("precision", 0.0))
+        out["precision_min"] = {
+            "violated": raw > 0.0,
+            "raw": float(raw),
+            "normalized": float(raw / _safe_denom(c.precision_min)),
+        }
     if c.pr_auc_min is not None:
-        score += max(0.0, c.pr_auc_min - m.get("pr_auc", 0.0))
-    return float(score)
+        raw = max(0.0, c.pr_auc_min - m.get("pr_auc", 0.0))
+        out["pr_auc_min"] = {
+            "violated": raw > 0.0,
+            "raw": float(raw),
+            "normalized": float(raw / _safe_denom(c.pr_auc_min)),
+        }
+    return out
+
+
+def _constraint_violation_score(row: CandidateRow, c: ConstraintConfig) -> float:
+    violations = _constraint_violations(row, c)
+    return float(sum(float(v["raw"]) for v in violations.values()))
 
 
 def _is_feasible(row: CandidateRow, c: ConstraintConfig) -> bool:
-    m = row.metrics
-    if (
-        c.alerts_per_1k_max is not None
-        and m.get("alerts_per_1k", float("inf")) > c.alerts_per_1k_max
-    ):
-        return False
-    if c.recall_min is not None and m.get("recall", 0.0) < c.recall_min:
-        return False
-    if c.precision_min is not None and m.get("precision", 0.0) < c.precision_min:
-        return False
-    if c.pr_auc_min is not None and m.get("pr_auc", 0.0) < c.pr_auc_min:
-        return False
-    return True
+    return all(not bool(v["violated"]) for v in _constraint_violations(row, c).values())
 
 
 def filter_candidates(
@@ -234,12 +333,6 @@ def _argmax_with_tiebreak(values: NDArray[np.float64], rows: Sequence[CandidateR
             if _tie_break_tuple(rows[i]) < _tie_break_tuple(rows[best]):
                 best = i
     return best
-
-
-@dataclass(frozen=True)
-class SelectionOutcome:
-    selected_index: int
-    trace: list[dict[str, Any]]
 
 
 class GreedySelector:
@@ -283,7 +376,6 @@ class UCBSelector:
         sums = np.zeros((n_arms,), dtype=np.float64)
         trace: list[dict[str, Any]] = []
 
-        # Initialization: one pull each arm.
         for arm in range(n_arms):
             observed = float(true_rewards[arm] + rng.normal(0.0, self.sigma))
             counts[arm] += 1
@@ -375,12 +467,95 @@ class ThompsonSelector:
         return SelectionOutcome(selected_index=selected, trace=trace)
 
 
-def _raise_no_feasible(rows: Sequence[CandidateRow], constraints: ConstraintConfig) -> None:
-    ranked = sorted(
-        rows,
-        key=lambda r: (_constraint_violation_score(r, constraints), _tie_break_tuple(r)),
+def _select_by_method(
+    rows: Sequence[CandidateRow],
+    method: MethodConfig,
+    objective: ObjectiveConfig,
+    seed: int,
+) -> SelectionOutcome:
+    if method.name == "greedy":
+        return GreedySelector().select(rows, objective)
+    if method.name == "bandit_ucb":
+        return UCBSelector(
+            rounds=method.rounds, ucb_c=method.ucb_c, sigma=method.thompson_sigma
+        ).select(rows, objective, seed=seed)
+    if method.name == "bandit_thompson":
+        return ThompsonSelector(rounds=method.rounds, sigma=method.thompson_sigma).select(
+            rows, objective, seed=seed
+        )
+    raise ValueError(f"Unsupported method name: {method.name}")
+
+
+def _apply_relax_step(base: ConstraintConfig, step: RelaxationStep) -> ConstraintConfig:
+    return replace(
+        base,
+        alerts_per_1k_max=step.alerts_per_1k_max
+        if step.alerts_per_1k_max is not None
+        else base.alerts_per_1k_max,
+        recall_min=step.recall_min if step.recall_min is not None else base.recall_min,
+        precision_min=step.precision_min if step.precision_min is not None else base.precision_min,
+        pr_auc_min=step.pr_auc_min if step.pr_auc_min is not None else base.pr_auc_min,
     )
-    preview = [
+
+
+def _soft_penalty_score(
+    row: CandidateRow,
+    constraints: ConstraintConfig,
+    objective: ObjectiveConfig,
+) -> tuple[float, dict[str, float]]:
+    violations = _constraint_violations(row, constraints)
+    penalty_cfg = constraints.soft_penalty
+    penalty_breakdown = {
+        "recall": float(violations.get("recall_min", {}).get("normalized", 0.0))
+        * penalty_cfg.lambda_recall,
+        "alerts": float(violations.get("alerts_per_1k_max", {}).get("normalized", 0.0))
+        * penalty_cfg.lambda_alerts,
+        "precision": float(violations.get("precision_min", {}).get("normalized", 0.0))
+        * penalty_cfg.lambda_precision,
+        "pr_auc": float(violations.get("pr_auc_min", {}).get("normalized", 0.0))
+        * penalty_cfg.lambda_pr_auc,
+    }
+    total_penalty = float(sum(penalty_breakdown.values()))
+    base_utility = float(score_candidate(row.metrics, objective))
+    final_score = base_utility - total_penalty
+    penalty_breakdown["base_utility"] = base_utility
+    penalty_breakdown["total_penalty"] = total_penalty
+    penalty_breakdown["final_score"] = final_score
+    return final_score, penalty_breakdown
+
+
+def _select_soft_candidate(
+    rows: Sequence[CandidateRow],
+    constraints: ConstraintConfig,
+    objective: ObjectiveConfig,
+) -> tuple[int, list[dict[str, Any]], dict[str, float]]:
+    best_idx = 0
+    trace: list[dict[str, Any]] = []
+    best_breakdown: dict[str, float] = {}
+    best_score = float("-inf")
+    for i, row in enumerate(rows):
+        score, breakdown = _soft_penalty_score(row, constraints, objective)
+        trace.append({"arm_index": i, "w": row.w, **breakdown})
+        if score > best_score:
+            best_idx = i
+            best_score = score
+            best_breakdown = breakdown
+            continue
+        if isclose(score, best_score, rel_tol=0.0, abs_tol=1e-12):
+            if _tie_break_tuple(row) < _tie_break_tuple(rows[best_idx]):
+                best_idx = i
+                best_breakdown = breakdown
+    return best_idx, trace, best_breakdown
+
+
+def _preview_infeasible(
+    rows: Sequence[CandidateRow],
+    constraints: ConstraintConfig,
+) -> list[dict[str, Any]]:
+    ranked = sorted(
+        rows, key=lambda r: (_constraint_violation_score(r, constraints), _tie_break_tuple(r))
+    )
+    return [
         {
             "w": row.w,
             "violation_score": _constraint_violation_score(row, constraints),
@@ -388,10 +563,109 @@ def _raise_no_feasible(rows: Sequence[CandidateRow], constraints: ConstraintConf
         }
         for row in ranked[:5]
     ]
-    raise ValueError(
-        "No feasible candidates satisfy constraints. Top-5 closest candidates:\n"
-        + json.dumps(preview, indent=2)
+
+
+def select_with_constraints(
+    candidates: Sequence[CandidateRow],
+    constraints: ConstraintConfig,
+    method: MethodConfig,
+    objective: ObjectiveConfig,
+    relaxation: RelaxationConfig,
+    fail_on_infeasible: bool,
+    seed: int,
+) -> tuple[CandidateRow, list[dict[str, Any]], dict[str, Any]]:
+    feasible_initial, _ = filter_candidates(candidates, constraints)
+    diagnostics: dict[str, Any] = {
+        "constraints_mode": constraints.mode,
+        "feasible_count_initial": len(feasible_initial),
+        "fallback_used": False,
+        "fallback_mode": "none",
+        "relaxation_trace": [],
+        "final_constraints_used": _constraints_to_dict(constraints),
+        "violated_constraints_summary": {},
+    }
+
+    if constraints.mode == "soft":
+        idx, trace, penalty = _select_soft_candidate(candidates, constraints, objective)
+        selected = candidates[idx]
+        diagnostics.update(
+            {
+                "fallback_used": True,
+                "fallback_mode": "soft_constraints",
+                "selection_rationale": "constraints.mode=soft",
+                "penalty_breakdown": penalty,
+                "final_constraints_used": _constraints_to_dict(constraints),
+                "violated_constraints_summary": _constraint_violations(selected, constraints),
+            }
+        )
+        return selected, trace, diagnostics
+
+    if feasible_initial:
+        outcome = _select_by_method(feasible_initial, method, objective, seed)
+        selected = feasible_initial[outcome.selected_index]
+        diagnostics["selection_rationale"] = "selected_from_initial_feasible_set"
+        return selected, outcome.trace, diagnostics
+
+    selected_constraints = constraints
+    selected_rows: list[CandidateRow] = []
+    selected_relax_step_idx: int | None = None
+
+    if relaxation.enabled:
+        for idx, step in enumerate(relaxation.schedule):
+            step_constraints = _apply_relax_step(constraints, step)
+            feasible_step, _ = filter_candidates(candidates, step_constraints)
+            diagnostics["relaxation_trace"].append(
+                {
+                    "step": idx,
+                    "constraints": _constraints_to_dict(step_constraints),
+                    "feasible_count": len(feasible_step),
+                }
+            )
+            if feasible_step and selected_relax_step_idx is None:
+                selected_rows = feasible_step
+                selected_constraints = step_constraints
+                selected_relax_step_idx = idx
+                if relaxation.stop_on_first_feasible:
+                    break
+
+    if selected_rows:
+        outcome = _select_by_method(selected_rows, method, objective, seed)
+        selected = selected_rows[outcome.selected_index]
+        diagnostics.update(
+            {
+                "fallback_used": True,
+                "fallback_mode": "auto_relaxation",
+                "relaxation_step_used": selected_relax_step_idx,
+                "selection_rationale": "selected_after_relaxation",
+                "final_constraints_used": _constraints_to_dict(selected_constraints),
+                "violated_constraints_summary": _constraint_violations(
+                    selected, selected_constraints
+                ),
+            }
+        )
+        return selected, outcome.trace, diagnostics
+
+    if fail_on_infeasible:
+        preview = _preview_infeasible(candidates, constraints)
+        raise ValueError(
+            "No feasible candidates satisfy constraints and relaxation. Top-5 closest candidates:\n"
+            + json.dumps(preview, indent=2)
+        )
+
+    idx, trace, penalty = _select_soft_candidate(candidates, constraints, objective)
+    selected = candidates[idx]
+    diagnostics.update(
+        {
+            "fallback_used": True,
+            "fallback_mode": "soft_constraints",
+            "relaxation_step_used": None,
+            "selection_rationale": "no_feasible_candidates_after_relaxation_soft_fallback",
+            "penalty_breakdown": penalty,
+            "final_constraints_used": _constraints_to_dict(constraints),
+            "violated_constraints_summary": _constraint_violations(selected, constraints),
+        }
     )
+    return selected, trace, diagnostics
 
 
 def select_weight(
@@ -436,28 +710,27 @@ def select_weight(
         raise ValueError("No candidate rows available after weight matching")
 
     feasible_rows, _ = filter_candidates(candidate_rows, cfg.constraints)
-    if not feasible_rows:
-        _raise_no_feasible(candidate_rows, cfg.constraints)
 
-    if cfg.method.name == "greedy":
-        outcome = GreedySelector().select(feasible_rows, cfg.objective)
-    elif cfg.method.name == "bandit_ucb":
-        outcome = UCBSelector(
-            rounds=cfg.method.rounds,
-            ucb_c=cfg.method.ucb_c,
-            sigma=cfg.method.thompson_sigma,
-        ).select(feasible_rows, cfg.objective, seed=seed)
-    elif cfg.method.name == "bandit_thompson":
-        outcome = ThompsonSelector(
-            rounds=cfg.method.rounds,
-            sigma=cfg.method.thompson_sigma,
-        ).select(feasible_rows, cfg.objective, seed=seed)
-    else:
-        raise ValueError(f"Unsupported method name: {cfg.method.name}")
+    selected, selection_trace, feasibility = select_with_constraints(
+        candidates=candidate_rows,
+        constraints=cfg.constraints,
+        method=cfg.method,
+        objective=cfg.objective,
+        relaxation=cfg.relaxation,
+        fail_on_infeasible=cfg.fail_on_infeasible,
+        seed=seed,
+    )
 
-    selected = feasible_rows[outcome.selected_index]
     return {
         "selected_weight": [float(v) for v in selected.w],
+        "selected_candidate": {
+            "w": [float(v) for v in selected.w],
+            "metrics": selected.metrics,
+            "objective_means": selected.objective_means,
+        },
+        "feasible_under_original_constraints": _is_feasible(selected, cfg.constraints),
+        "relaxation_step_used": feasibility.get("relaxation_step_used"),
+        "penalty_breakdown": feasibility.get("penalty_breakdown"),
         "method": {
             "name": cfg.method.name,
             "params": {
@@ -468,14 +741,30 @@ def select_weight(
             },
         },
         "constraints": {
+            "mode": cfg.constraints.mode,
             "alerts_per_1k_max": cfg.constraints.alerts_per_1k_max,
             "recall_min": cfg.constraints.recall_min,
             "precision_min": cfg.constraints.precision_min,
             "pr_auc_min": cfg.constraints.pr_auc_min,
         },
+        "relaxation": {
+            "enabled": cfg.relaxation.enabled,
+            "schedule": [
+                {
+                    "alerts_per_1k_max": step.alerts_per_1k_max,
+                    "recall_min": step.recall_min,
+                    "precision_min": step.precision_min,
+                    "pr_auc_min": step.pr_auc_min,
+                }
+                for step in cfg.relaxation.schedule
+            ],
+            "stop_on_first_feasible": cfg.relaxation.stop_on_first_feasible,
+        },
+        "fail_on_infeasible": cfg.fail_on_infeasible,
         "feasible_count": len(feasible_rows),
         "candidate_count": len(candidate_rows),
         "selected_val_metrics": selected.metrics,
         "selected_val_objective_means": selected.objective_means,
-        "selection_trace": outcome.trace,
+        "selection_trace": selection_trace,
+        "feasibility": feasibility,
     }

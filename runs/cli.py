@@ -361,6 +361,7 @@ def main(
     meta_constraints: dict[str, Any] = {}
     meta_selection_path: str | None = None
     meta_selection_md_path: str | None = None
+    meta_feasibility_path: str | None = None
     if config_paths.get("morl"):
         morl_cfg = load_yaml(config_paths["morl"])
         morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))
@@ -426,6 +427,7 @@ def main(
                     selected_test_md_path = artifacts["selected_test_md"]
                     meta_selection_path = artifacts["meta_selection_json"]
                     meta_selection_md_path = artifacts["meta_selection_md"]
+                    meta_feasibility_path = artifacts.get("meta_feasibility_json")
 
     morl_objective_source: str | None = None
     morl_level1_stats: dict[str, float] = {}
@@ -592,6 +594,9 @@ def main(
             else None,
             "selection_report_path": os.path.relpath(meta_selection_md_path, run_root)
             if meta_selection_md_path
+            else None,
+            "feasibility_output_path": os.path.relpath(meta_feasibility_path, run_root)
+            if meta_feasibility_path
             else None,
             "selected_test_output_path": os.path.relpath(selected_test_path, run_root)
             if selected_test_path
