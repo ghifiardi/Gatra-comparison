@@ -7,9 +7,10 @@ MORL_CONFIG ?= configs/morl.yaml
 META_CONFIG ?= configs/meta_controller_relaxed.yaml
 JOIN_CONFIG ?= configs/join.yaml
 POLICY_EVAL_CONFIG ?= configs/policy_eval.yaml
+META_STABILITY_CONFIG ?= configs/meta_stability.yaml
 OUT_ROOT ?= reports/runs
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick meta_stability run_meta_stability_quick
 
 format:
 	@$(PY) -m ruff format .
@@ -149,6 +150,29 @@ run_morl_policy_quick:
 	  --meta-config $(META_CONFIG) \
 	  --join-config $(JOIN_CONFIG) \
 	  --policy-eval-config $(POLICY_EVAL_CONFIG) \
+	  --out-root $(OUT_ROOT) \
+	  --quick
+
+meta_stability:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --meta-config $(META_CONFIG) \
+	  --meta-stability-config $(META_STABILITY_CONFIG) \
+	  --out-root $(OUT_ROOT)
+
+run_meta_stability_quick:
+	PYTHONPATH=. $(PY) -m runs.cli \
+	  --data-config $(DATA_CONFIG) \
+	  --iforest-config $(IFOREST_CONFIG) \
+	  --ppo-config $(PPO_CONFIG) \
+	  --eval-config $(EVAL_CONFIG) \
+	  --morl-config $(MORL_CONFIG) \
+	  --meta-config $(META_CONFIG) \
+	  --meta-stability-config $(META_STABILITY_CONFIG) \
 	  --out-root $(OUT_ROOT) \
 	  --quick
 

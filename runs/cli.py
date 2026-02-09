@@ -29,6 +29,7 @@ from evaluation.metrics import classification_metrics
 from evaluation.meta_selection_report import write_meta_selection_artifacts
 from evaluation.morl_report import evaluate_morl_weight_on_split, run_morl_weight_sweep
 from evaluation.policy_eval import run_policy_eval
+from evaluation.meta_stability import run_stability_suite, write_stability_artifacts
 from evaluation.robustness import run_robustness_suite
 from runs.reporting import (
     build_run_manifest,
@@ -77,6 +78,7 @@ def _snapshot_configs(
     meta_config: str | None = None,
     join_config: str | None = None,
     policy_eval_config: str | None = None,
+    meta_stability_config: str | None = None,
 ) -> dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -96,6 +98,8 @@ def _snapshot_configs(
         cfgs["join.yaml"] = load_yaml(join_config)
     if policy_eval_config:
         cfgs["policy_eval.yaml"] = load_yaml(policy_eval_config)
+    if meta_stability_config:
+        cfgs["meta_stability.yaml"] = load_yaml(meta_stability_config)
 
     if quick:
         data_cfg = cfgs["data.yaml"]
@@ -145,6 +149,8 @@ def _snapshot_configs(
         out_paths["join"] = paths["join.yaml"]
     if "policy_eval.yaml" in paths:
         out_paths["policy_eval"] = paths["policy_eval.yaml"]
+    if "meta_stability.yaml" in paths:
+        out_paths["meta_stability"] = paths["meta_stability.yaml"]
     return out_paths
 
 
@@ -270,6 +276,7 @@ def main(
     meta_config: str | None = None,
     join_config: str | None = None,
     policy_eval_config: str | None = None,
+    meta_stability_config: str | None = None,
     out_root: str = "reports/runs",
     quick: bool = False,
     overwrite: bool = False,
@@ -304,6 +311,7 @@ def main(
         meta_config=meta_config,
         join_config=join_config,
         policy_eval_config=policy_eval_config,
+        meta_stability_config=meta_stability_config,
     )
 
     ppo_cfg = load_yaml(config_paths["ppo"])
@@ -362,6 +370,8 @@ def main(
     meta_selection_path: str | None = None
     meta_selection_md_path: str | None = None
     meta_feasibility_path: str | None = None
+    meta_stability_hash: str | None = None
+    meta_stability_output_path: str | None = None
     if config_paths.get("morl"):
         morl_cfg = load_yaml(config_paths["morl"])
         morl_enabled = bool(morl_cfg.get("morl", {}).get("enabled", False))
@@ -428,6 +438,20 @@ def main(
                     meta_selection_path = artifacts["meta_selection_json"]
                     meta_selection_md_path = artifacts["meta_selection_md"]
                     meta_feasibility_path = artifacts.get("meta_feasibility_json")
+
+                    if config_paths.get("meta_stability"):
+                        meta_stability_hash = file_sha256(config_paths["meta_stability"])
+                        stability_out_dir = os.path.join(eval_dir, "meta_stability")
+                        stability_payload = run_stability_suite(
+                            val_results_path=os.path.join(morl_eval_dir, "morl_results_val.json"),
+                            stability_cfg_path=config_paths["meta_stability"],
+                            seed=seed_value,
+                        )
+                        stability_artifacts = write_stability_artifacts(
+                            out_dir=stability_out_dir,
+                            payload=stability_payload,
+                        )
+                        meta_stability_output_path = stability_artifacts["json"]
 
     morl_objective_source: str | None = None
     morl_level1_stats: dict[str, float] = {}
@@ -524,6 +548,8 @@ def main(
         config_hashes["join"] = file_sha256(config_paths["join"])
     if config_paths.get("policy_eval"):
         config_hashes["policy_eval"] = file_sha256(config_paths["policy_eval"])
+    if config_paths.get("meta_stability"):
+        config_hashes["meta_stability"] = file_sha256(config_paths["meta_stability"])
     config_snapshot = {
         "data": os.path.relpath(config_paths["data"], run_root),
         "iforest": os.path.relpath(config_paths["iforest"], run_root),
@@ -540,6 +566,10 @@ def main(
         config_snapshot["join"] = os.path.relpath(config_paths["join"], run_root)
     if config_paths.get("policy_eval"):
         config_snapshot["policy_eval"] = os.path.relpath(config_paths["policy_eval"], run_root)
+    if config_paths.get("meta_stability"):
+        config_snapshot["meta_stability"] = os.path.relpath(
+            config_paths["meta_stability"], run_root
+        )
 
     poetry_lock_hash = None
     lock_path = os.path.join(os.getcwd(), "poetry.lock")
@@ -625,6 +655,13 @@ def main(
             else None,
             "report_path": os.path.relpath(policy_eval_md_path, run_root)
             if policy_eval_md_path
+            else None,
+        },
+        meta_stability={
+            "enabled": bool(meta_stability_output_path),
+            "config_sha256": meta_stability_hash,
+            "output_path": os.path.relpath(meta_stability_output_path, run_root)
+            if meta_stability_output_path
             else None,
         },
     )
