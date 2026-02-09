@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import platform
 import sys
@@ -129,12 +130,18 @@ def render_summary_md(
         f"- Test: n={counts.get('test', 0)}, pos_rate={pos_rates.get('test', 0.0):.4f}",
     ]
 
+    def fmt_metric(value: Any) -> str:
+        if isinstance(value, (int, float)):
+            v = float(value)
+            return "N/A" if math.isnan(v) else f"{v:.4f}"
+        return "N/A"
+
     def row(model_key: str) -> str:
         m = metrics.get(model_key, {})
         return (
-            f"| {model_key} | {m.get('roc_auc', float('nan')):.4f} |"
-            f" {m.get('pr_auc', float('nan')):.4f} | {m.get('precision', 0.0):.4f} |"
-            f" {m.get('recall', 0.0):.4f} | {m.get('f1', 0.0):.4f} |"
+            f"| {model_key} | {fmt_metric(m.get('roc_auc', float('nan')))} |"
+            f" {fmt_metric(m.get('pr_auc', float('nan')))} | {fmt_metric(m.get('precision', 0.0))} |"
+            f" {fmt_metric(m.get('recall', 0.0))} | {fmt_metric(m.get('f1', 0.0))} |"
             f" {thresholds.get(model_key, 0.0):.3f} |"
         )
 
@@ -172,6 +179,16 @@ def render_summary_md(
         row("ppo"),
         "",
     ]
+    test_pos_rate = float(pos_rates.get("test", 0.0))
+    if test_pos_rate <= 0.0 or test_pos_rate >= 1.0:
+        lines.extend(
+            [
+                "## Metric Notes",
+                "- ROC AUC omitted: only one class present in TEST labels.",
+                "- PR AUC omitted: only one class present in TEST labels.",
+                "",
+            ]
+        )
     if policy_eval:
         lines.extend(
             [

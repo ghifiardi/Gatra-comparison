@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import numpy as np
 from numpy.typing import NDArray
 from sklearn.metrics import precision_recall_fscore_support, roc_auc_score, average_precision_score
@@ -26,7 +27,11 @@ def classification_metrics(
     y_pred = (score >= threshold).astype(int)
     p, r, f1, _ = precision_recall_fscore_support(y, y_pred, average="binary", zero_division=0)
     out = {"precision": float(p), "recall": float(r), "f1": float(f1)}
-    # guard for constant labels
+    # Guard against single-class labels to avoid undefined metric warnings.
+    if np.unique(y).shape[0] < 2:
+        out["roc_auc"] = float("nan")
+        out["pr_auc"] = float("nan")
+        return out
     try:
         out["roc_auc"] = float(roc_auc_score(y, score))
     except Exception:

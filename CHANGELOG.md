@@ -1,3 +1,11 @@
+## v0.10.1
+- Operator quickstart tightened for Option 2 defaults (local CSV + BigQuery variants)
+- Artifact contract documented for `run_morl_policy_quick` with troubleshooting guidance
+- Summary/report guardrail for single-class TEST splits:
+  - ROC-AUC/PR-AUC shown as `N/A`
+  - explicit note: metric omitted due to one-class TEST labels
+- No behavior change to fallback logic; default relaxed meta-controller path remains unchanged
+
 ## v0.9
 - Contract cache: skip re-export when data config unchanged (keyed by config content hash)
 - Resume mode: `--contract-dir-input` reuses a pre-built contract directory
