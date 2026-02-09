@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -138,3 +139,12 @@ def test_meta_controller_soft_constraints_is_deterministic_and_has_diagnostics(
     payload = json.loads(Path(artifacts["meta_feasibility_json"]).read_text())
     assert payload["fallback_mode"] == "soft_constraints"
     assert "final_constraints_used" in payload
+
+    hash1_sel = hashlib.sha256(Path(artifacts["meta_selection_json"]).read_bytes()).hexdigest()
+    hash1_fea = hashlib.sha256(Path(artifacts["meta_feasibility_json"]).read_bytes()).hexdigest()
+
+    artifacts_2 = write_meta_selection_artifacts(str(out_dir), s2, selected_test)
+    hash2_sel = hashlib.sha256(Path(artifacts_2["meta_selection_json"]).read_bytes()).hexdigest()
+    hash2_fea = hashlib.sha256(Path(artifacts_2["meta_feasibility_json"]).read_bytes()).hexdigest()
+    assert hash1_sel == hash2_sel
+    assert hash1_fea == hash2_fea
