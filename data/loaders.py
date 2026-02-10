@@ -36,5 +36,12 @@ def load_data(data_config_path: str) -> LoadedData:
         events, labels = load_events_labels_from_csv(cast(dict[str, Any], cfg), data_config_path)
         return LoadedData(events=events, labels=labels)
 
-    # Stubs you can implement later
+    if source == "bigquery":
+        from .bq_loader import load_events_labels_from_bigquery
+
+        events, labels = load_events_labels_from_bigquery(
+            cast(dict[str, Any], cfg), data_config_path
+        )
+        return LoadedData(events=events, labels=labels)
+
     raise NotImplementedError(f"Data source not implemented: {source}")

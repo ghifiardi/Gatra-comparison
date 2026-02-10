@@ -1,3 +1,11 @@
+## v0.11
+- BigQuery data loader (`data/bq_loader.py`): load events and labels from
+  `gatra-prd-c335.gatra_database.activity_logs` / `ada_feedback`
+- `google-cloud-bigquery` added as optional dependency (`poetry install -E bigquery`)
+- Lazy import keeps CI and `make test` working without GCP credentials
+- Label matching follows CSV loader priority: row_key → alarm_id → event_id
+- CI-safe unit tests for row mapping, config validation, and label matching
+
 ## v0.10.1
 - Operator quickstart tightened for Option 2 defaults (local CSV + BigQuery variants)
 - Artifact contract documented for `run_morl_policy_quick` with troubleshooting guidance
