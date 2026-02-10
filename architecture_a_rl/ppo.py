@@ -25,7 +25,7 @@ def ppo_update(
 ) -> dict[str, float]:
     states, actions, old_logp, returns = batch
     probs = actor(states)
-    dist = torch.distributions.Categorical(probs=probs)
+    dist = torch.distributions.Categorical(probs=probs)  # type: ignore[no-untyped-call]
     logp = dist.log_prob(actions)  # type: ignore[no-untyped-call]
 
     ratio = torch.exp(logp - old_logp)
