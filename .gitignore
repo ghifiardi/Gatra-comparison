@@ -37,3 +37,7 @@ codex_tasks/
 claude_tasks/
 .agents/
 data/local/
+
+# credential key material (never commit)
+*sa*.json
+*key*.json
