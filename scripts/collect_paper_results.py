@@ -122,9 +122,7 @@ def _extract_row(run_dir: Path, meta: dict[str, str]) -> dict[str, Any]:
         "policy_iforest_alerts_per_1k": _flatten_metric(if_sel_test, "alerts_per_1k"),
         "policy_iforest_threshold": _flatten_metric(if_sel_test, "threshold"),
         "objective_source": morl_manifest.get("objective_source"),
-        "normalization_applied": (morl_manifest.get("normalization_summary") or {}).get(
-            "applied"
-        )
+        "normalization_applied": (morl_manifest.get("normalization_summary") or {}).get("applied")
         if isinstance(morl_manifest.get("normalization_summary"), dict)
         else "",
         "data_config_path": config_snapshot.get("data"),
