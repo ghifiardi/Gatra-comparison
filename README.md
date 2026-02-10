@@ -49,7 +49,7 @@ Operator quickstart (BigQuery source, requires ADC/service-account auth):
 
 ```bash
 make run_morl_policy_quick \
-  DATA_CONFIG=configs/data.yaml \
+  DATA_CONFIG=configs/data_bigquery_gatra_prd_c335.yaml \
   META_CONFIG=configs/meta_controller_relaxed.yaml \
   CONTRACT_CACHE_ROOT=reports/contracts_cache
 ```
