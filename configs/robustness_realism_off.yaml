@@ -1,0 +1,21 @@
+robustness:
+  enabled: true
+  seed: 42
+  label_availability_created_at_enabled: false
+
+  quick:
+    max_variants: 3
+
+  variants:
+    - name: baseline
+      kind: none
+
+    - name: label_delay_created_7d_unknown
+      kind: label_delay
+      delay: "7d"
+      policy: treat_as_unknown
+
+    - name: label_delay_created_12h_benign
+      kind: label_delay
+      delay: "12h"
+      policy: treat_as_benign

@@ -182,6 +182,7 @@ def run_robustness_suite(
     rcfg = cfg.get("robustness", {})
     seed = int(rcfg.get("seed", 42))
     rng = np.random.default_rng(seed)
+    created_at_gating_enabled = bool(rcfg.get("label_availability_created_at_enabled", True))
 
     outp = Path(out_dir)
     outp.mkdir(parents=True, exist_ok=True)
@@ -240,17 +241,27 @@ def run_robustness_suite(
         elif kind == "label_delay":
             policy = _as_label_policy(str(v.get("policy", "treat_as_unknown")))
             if "delay" in v or "eval_time_epoch_s" in v:
-                resolved_policy = "treat_as_unknown" if policy == "drop" else policy
-                y2, available_mask, meta_delay = apply_label_availability(
-                    y_true=y_base.astype(np.int_),
-                    event_timestamps_epoch_s=ts_base,
-                    label_created_at_epoch_s=label_created_base,
-                    delay=str(v.get("delay", "7d")),
-                    policy=resolved_policy,
-                    eval_time_epoch_s=int(v["eval_time_epoch_s"])
-                    if "eval_time_epoch_s" in v
-                    else None,
-                )
+                if created_at_gating_enabled:
+                    resolved_policy = "treat_as_unknown" if policy == "drop" else policy
+                    y2, available_mask, meta_delay = apply_label_availability(
+                        y_true=y_base.astype(np.int_),
+                        event_timestamps_epoch_s=ts_base,
+                        label_created_at_epoch_s=label_created_base,
+                        delay=str(v.get("delay", "7d")),
+                        policy=resolved_policy,
+                        eval_time_epoch_s=int(v["eval_time_epoch_s"])
+                        if "eval_time_epoch_s" in v
+                        else None,
+                    )
+                else:
+                    y2 = y_base.astype(np.int8, copy=True)
+                    available_mask = np.ones((y2.shape[0],), dtype=np.bool_)
+                    meta_delay = {
+                        "delay_seconds": str(v.get("delay", "7d")),
+                        "policy": policy,
+                        "created_at_gating_enabled": False,
+                        "skipped": "created_at_label_gating_disabled",
+                    }
                 write_label_availability_artifacts(
                     out_dir=str(outp),
                     split="test",
@@ -305,17 +316,26 @@ def run_robustness_suite(
                 elif sk == "label_delay":
                     policy = _as_label_policy(str(step.get("policy", "treat_as_unknown")))
                     if "delay" in step or "eval_time_epoch_s" in step:
-                        resolved_policy = "treat_as_unknown" if policy == "drop" else policy
-                        y, available_mask, meta_delay = apply_label_availability(
-                            y_true=y.astype(np.int_),
-                            event_timestamps_epoch_s=ts_base,
-                            label_created_at_epoch_s=label_created_base,
-                            delay=str(step.get("delay", "7d")),
-                            policy=resolved_policy,
-                            eval_time_epoch_s=int(step["eval_time_epoch_s"])
-                            if "eval_time_epoch_s" in step
-                            else None,
-                        )
+                        if created_at_gating_enabled:
+                            resolved_policy = "treat_as_unknown" if policy == "drop" else policy
+                            y, available_mask, meta_delay = apply_label_availability(
+                                y_true=y.astype(np.int_),
+                                event_timestamps_epoch_s=ts_base,
+                                label_created_at_epoch_s=label_created_base,
+                                delay=str(step.get("delay", "7d")),
+                                policy=resolved_policy,
+                                eval_time_epoch_s=int(step["eval_time_epoch_s"])
+                                if "eval_time_epoch_s" in step
+                                else None,
+                            )
+                        else:
+                            available_mask = np.ones((y.shape[0],), dtype=np.bool_)
+                            meta_delay = {
+                                "delay_seconds": str(step.get("delay", "7d")),
+                                "policy": policy,
+                                "created_at_gating_enabled": False,
+                                "skipped": "created_at_label_gating_disabled",
+                            }
                         write_label_availability_artifacts(
                             out_dir=str(outp),
                             split="test",
