@@ -1,3 +1,12 @@
+## v0.11.1
+- Paper Week-1 runbook (`docs/paper_week1_runbook.md`): 8-condition experiment matrix
+  (A1/A2 primary, B1-B3 ablations, R1-R2 robustness, C1 meta-stability)
+- `scripts/paper_matrix.sh`: orchestrates CSV (3 seeds) + BigQuery (1 seed) matrix
+- `scripts/collect_paper_results.py`: flattens run artifacts into single CSV
+- Makefile targets: `paper_week1_csv`, `paper_week1_bq`, `paper_collect_week1`
+- Helper robustness configs: realism OFF, label delay 7d/12h variants
+- Smoke test for collector (`tests/test_collect_paper_results_smoke.py`)
+
 ## v0.11
 - BigQuery data loader (`data/bq_loader.py`): load events and labels from
   `gatra-prd-c335.gatra_database.activity_logs` / `ada_feedback`
