@@ -6,6 +6,27 @@ dataset:
   bq_labels_table: "ada_feedback"
   # Optional smoke cap for early validation once BigQuery loader is implemented.
   limit: 10000
+  events:
+    event_ts_col: "event_timestamp"
+    session_id_col: "session_id"
+    user_col: "user"
+    action_col: "action"
+    page_col: "page"
+    details_col: "details"
+    row_key:
+      mode: "derived_sha1"
+      cols:
+        - "session_id"
+        - "event_timestamp"
+        - "user"
+        - "action"
+        - "page"
+        - "details"
+  labels:
+    alarm_id_col: "alarm_id"
+    case_class_col: "case_class"
+    created_at_col: "created_at"
+    event_id_col: "id"
 
 splits:
   train:
