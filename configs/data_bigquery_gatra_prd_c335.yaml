@@ -1,0 +1,19 @@
+dataset:
+  source: "bigquery"  # "toy" | "csv" | "parquet" | "bigquery" (stub)
+  bq_project: "gatra-prd-c335"
+  bq_dataset: "gatra_database"
+  bq_events_table: "activity_logs"
+  bq_labels_table: "ada_feedback"
+  # Optional smoke cap for early validation once BigQuery loader is implemented.
+  limit: 10000
+
+splits:
+  train:
+    start: "2025-11-04"
+    end: "2025-12-05"
+  val:
+    start: "2025-12-06"
+    end: "2025-12-15"
+  test:
+    start: "2025-12-16"
+    end: "2025-12-22"
