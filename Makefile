@@ -12,6 +12,8 @@ META_STABILITY_CONFIG ?= configs/meta_stability.yaml
 OUT_ROOT ?= reports/runs
 CONTRACT_CACHE_ROOT ?= reports/contracts_cache
 PAPER_INDEX ?= reports/paper_results/week1_run_index.csv
+PAPER_INDEX_CSV ?= reports/paper_results/week1_run_index_csv.csv
+PAPER_INDEX_BQ ?= reports/paper_results/week1_run_index_bq.csv
 PAPER_RESULTS_OUT ?= reports/paper_results/paper_week1_results.csv
 PAPER_CSV_SEEDS ?= 42,1337,2026
 PAPER_BQ_SEEDS ?= 42
@@ -211,13 +213,16 @@ run_meta_stability_quick:
 	  --quick
 
 paper_week1_csv:
-	bash scripts/paper_matrix.sh --csv --seeds $(PAPER_CSV_SEEDS) --index $(PAPER_INDEX)
+	bash scripts/paper_matrix.sh --csv --seeds $(PAPER_CSV_SEEDS) --index-out $(PAPER_INDEX_CSV)
 
 paper_week1_bq:
-	bash scripts/paper_matrix.sh --bq --bq-seeds $(PAPER_BQ_SEEDS) --index $(PAPER_INDEX)
+	bash scripts/paper_matrix.sh --bq --bq-seeds $(PAPER_BQ_SEEDS) --index-out $(PAPER_INDEX_BQ)
 
 paper_collect_week1:
-	PYTHONPATH=. $(PY) scripts/collect_paper_results.py --index $(PAPER_INDEX) --out $(PAPER_RESULTS_OUT)
+	PYTHONPATH=. $(PY) scripts/collect_paper_results.py \
+	  --index $(PAPER_INDEX_CSV) \
+	  --index $(PAPER_INDEX_BQ) \
+	  --out $(PAPER_RESULTS_OUT)
 
 dev:
 	@$(PY) -m pip install -U pip

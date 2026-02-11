@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: bash scripts/paper_matrix.sh [--csv] [--bq] [--all] [--dry-run] [--seeds LIST] [--bq-seeds LIST] [--index PATH]
+Usage: bash scripts/paper_matrix.sh [--csv] [--bq] [--all] [--dry-run] [--seeds LIST] [--bq-seeds LIST] [--index-out PATH] [--append-index]
 
 Options:
   --csv                 Run CSV conditions (default if no mode is provided)
@@ -12,7 +12,9 @@ Options:
   --dry-run             Print commands and index rows without executing
   --seeds LIST          CSV seeds as comma-separated list (default: 42,1337,2026)
   --bq-seeds LIST       BigQuery seeds as comma-separated list (default: 42)
-  --index PATH          Index CSV output (default: reports/paper_results/week1_run_index.csv)
+  --index-out PATH      Index CSV output (default: reports/paper_results/week1_run_index.csv)
+  --append-index        Append rows to existing index file (write header only if file is new)
+  --index PATH          Backward-compatible alias for --index-out
   -h, --help            Show this help
 USAGE
 }
@@ -22,7 +24,11 @@ RUN_BQ=0
 DRY_RUN=0
 CSV_SEEDS="42,1337,2026"
 BQ_SEEDS="42"
-INDEX_PATH="reports/paper_results/week1_run_index.csv"
+INDEX_OUT="reports/paper_results/week1_run_index.csv"
+APPEND_INDEX=0
+INDEX_HEADER_WITH_GROUP='timestamp,run_group,condition,seed,backend,runner,data_config,morl_config,meta_config,robustness_config,meta_stability_config,run_dir,status,command'
+INDEX_HEADER_BASE='timestamp,condition,seed,backend,runner,data_config,morl_config,meta_config,robustness_config,meta_stability_config,run_dir,status,command'
+INDEX_HAS_RUN_GROUP=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,9 +57,13 @@ while [[ $# -gt 0 ]]; do
       BQ_SEEDS="$2"
       shift 2
       ;;
-    --index)
-      INDEX_PATH="$2"
+    --index-out|--index)
+      INDEX_OUT="$2"
       shift 2
+      ;;
+    --append-index)
+      APPEND_INDEX=1
+      shift
       ;;
     -h|--help)
       usage
@@ -88,8 +98,74 @@ META_STABILITY_CFG="${META_STABILITY_CFG:-configs/meta_stability.yaml}"
 PPO_CONFIG_BASE="${PPO_CONFIG_BASE:-configs/ppo.yaml}"
 IFOREST_CONFIG_BASE="${IFOREST_CONFIG_BASE:-configs/iforest.yaml}"
 
-mkdir -p "$(dirname "$INDEX_PATH")"
-printf '%s\n' 'timestamp,condition,seed,backend,runner,data_config,morl_config,meta_config,robustness_config,meta_stability_config,run_dir,status,command' > "$INDEX_PATH"
+init_index() {
+  mkdir -p "$(dirname "$INDEX_OUT")"
+  if [[ $APPEND_INDEX -eq 1 && -s "$INDEX_OUT" ]]; then
+    local header
+    header="$(head -n1 "$INDEX_OUT")"
+    if [[ "$header" == "$INDEX_HEADER_WITH_GROUP" ]]; then
+      INDEX_HAS_RUN_GROUP=1
+    elif [[ "$header" == "$INDEX_HEADER_BASE" ]]; then
+      INDEX_HAS_RUN_GROUP=0
+    else
+      echo "Unsupported index header in $INDEX_OUT: $header" >&2
+      exit 2
+    fi
+    return
+  fi
+
+  INDEX_HAS_RUN_GROUP=1
+  printf '%s\n' "$INDEX_HEADER_WITH_GROUP" > "$INDEX_OUT"
+}
+
+append_index_row() {
+  local run_group="$1"
+  local condition="$2"
+  local seed="$3"
+  local backend="$4"
+  local runner="$5"
+  local data_config="$6"
+  local morl_config="$7"
+  local meta_config="$8"
+  local robustness_config="$9"
+  local meta_stability_config="${10}"
+  local run_dir="${11}"
+  local status="${12}"
+  local cmd_str="${13}"
+
+  if [[ $INDEX_HAS_RUN_GROUP -eq 1 ]]; then
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "$(csv_escape "$run_group")" \
+      "$(csv_escape "$condition")" \
+      "$(csv_escape "$seed")" \
+      "$(csv_escape "$backend")" \
+      "$(csv_escape "$runner")" \
+      "$(csv_escape "$data_config")" \
+      "$(csv_escape "$morl_config")" \
+      "$(csv_escape "$meta_config")" \
+      "$(csv_escape "$robustness_config")" \
+      "$(csv_escape "$meta_stability_config")" \
+      "$(csv_escape "$run_dir")" \
+      "$(csv_escape "$status")" \
+      "$(csv_escape "$cmd_str")" >> "$INDEX_OUT"
+  else
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "$(csv_escape "$condition")" \
+      "$(csv_escape "$seed")" \
+      "$(csv_escape "$backend")" \
+      "$(csv_escape "$runner")" \
+      "$(csv_escape "$data_config")" \
+      "$(csv_escape "$morl_config")" \
+      "$(csv_escape "$meta_config")" \
+      "$(csv_escape "$robustness_config")" \
+      "$(csv_escape "$meta_stability_config")" \
+      "$(csv_escape "$run_dir")" \
+      "$(csv_escape "$status")" \
+      "$(csv_escape "$cmd_str")" >> "$INDEX_OUT"
+  fi
+}
 
 TMP_CFG_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/paper_matrix_cfg.XXXXXX")"
 cleanup() {
@@ -159,6 +235,10 @@ run_and_record() {
   cmd_str="$(printf '%q ' "${cmd[@]}")"
   local run_dir=""
   local status="planned"
+  local run_group="$backend"
+  if [[ "$backend" == "bigquery" ]]; then
+    run_group="bq"
+  fi
 
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "[DRY-RUN] $condition seed=$seed backend=$backend"
@@ -179,38 +259,38 @@ run_and_record() {
     rm -f "$log_file"
     if [[ "$status" != "ok" ]]; then
       echo "Condition failed: $condition seed=$seed status=$status" >&2
-      printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
-        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        "$(csv_escape "$condition")" \
-        "$(csv_escape "$seed")" \
-        "$(csv_escape "$backend")" \
-        "$(csv_escape "$runner")" \
-        "$(csv_escape "$data_config")" \
-        "$(csv_escape "$morl_config")" \
-        "$(csv_escape "$meta_config")" \
-        "$(csv_escape "$robustness_config")" \
-        "$(csv_escape "$meta_stability_config")" \
-        "$(csv_escape "$run_dir")" \
-        "$(csv_escape "$status")" \
-        "$(csv_escape "$cmd_str")" >> "$INDEX_PATH"
+      append_index_row \
+        "$run_group" \
+        "$condition" \
+        "$seed" \
+        "$backend" \
+        "$runner" \
+        "$data_config" \
+        "$morl_config" \
+        "$meta_config" \
+        "$robustness_config" \
+        "$meta_stability_config" \
+        "$run_dir" \
+        "$status" \
+        "$cmd_str"
       exit 1
     fi
   fi
 
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$(csv_escape "$condition")" \
-    "$(csv_escape "$seed")" \
-    "$(csv_escape "$backend")" \
-    "$(csv_escape "$runner")" \
-    "$(csv_escape "$data_config")" \
-    "$(csv_escape "$morl_config")" \
-    "$(csv_escape "$meta_config")" \
-    "$(csv_escape "$robustness_config")" \
-    "$(csv_escape "$meta_stability_config")" \
-    "$(csv_escape "$run_dir")" \
-    "$(csv_escape "$status")" \
-    "$(csv_escape "$cmd_str")" >> "$INDEX_PATH"
+  append_index_row \
+    "$run_group" \
+    "$condition" \
+    "$seed" \
+    "$backend" \
+    "$runner" \
+    "$data_config" \
+    "$morl_config" \
+    "$meta_config" \
+    "$robustness_config" \
+    "$meta_stability_config" \
+    "$run_dir" \
+    "$status" \
+    "$cmd_str"
 }
 
 run_csv_matrix() {
@@ -323,6 +403,7 @@ run_bq_matrix() {
 
 IFS=',' read -r -a CSV_SEED_ARR <<< "$CSV_SEEDS"
 IFS=',' read -r -a BQ_SEED_ARR <<< "$BQ_SEEDS"
+init_index
 
 if [[ $RUN_CSV -eq 1 ]]; then
   for seed in "${CSV_SEED_ARR[@]}"; do
@@ -336,4 +417,4 @@ if [[ $RUN_BQ -eq 1 ]]; then
   done
 fi
 
-echo "Wrote index: $INDEX_PATH"
+echo "Wrote index: $INDEX_OUT"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import glob
 import json
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,7 @@ def _extract_row(run_dir: Path, meta: dict[str, str]) -> dict[str, Any]:
     return {
         "run_id": _run_id_from_dir(run_dir),
         "run_dir": str(run_dir),
+        "run_group": meta.get("run_group", ""),
         "condition": meta.get("condition", ""),
         "seed": meta.get("seed", ""),
         "backend": meta.get("backend", ""),
@@ -152,19 +154,43 @@ def _rows_from_index(index_path: Path) -> list[tuple[Path, dict[str, str]]]:
     return rows
 
 
-def collect_rows(index: Path | None, run_dirs: list[Path]) -> list[dict[str, Any]]:
+def _expand_index_paths(indices: list[Path], index_globs: list[str]) -> list[Path]:
+    merged: list[Path] = []
+    for idx in indices:
+        merged.append(idx)
+    for pattern in index_globs:
+        for raw in sorted(glob.glob(pattern)):
+            merged.append(Path(raw))
+    deduped: list[Path] = []
     seen: set[str] = set()
+    for p in merged:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(p)
+    return deduped
+
+
+def collect_rows(
+    indices: list[Path], index_globs: list[str], run_dirs: list[Path]
+) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str]] = set()
     outputs: list[dict[str, Any]] = []
 
     indexed: list[tuple[Path, dict[str, str]]] = []
-    if index is not None:
-        indexed.extend(_rows_from_index(index))
+    for idx in _expand_index_paths(indices, index_globs):
+        indexed.extend(_rows_from_index(idx))
 
     for rd in run_dirs:
         indexed.append((rd, {}))
 
     for run_dir, meta in indexed:
-        key = str(run_dir)
+        key = (
+            (meta.get("condition") or "").strip(),
+            (meta.get("seed") or "").strip(),
+            str(run_dir),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -173,6 +199,7 @@ def collect_rows(index: Path | None, run_dirs: list[Path]) -> list[dict[str, Any
                 {
                     "run_id": run_dir.name,
                     "run_dir": str(run_dir),
+                    "run_group": meta.get("run_group", ""),
                     "condition": meta.get("condition", ""),
                     "seed": meta.get("seed", ""),
                     "backend": meta.get("backend", ""),
@@ -189,6 +216,7 @@ def write_csv(rows: list[dict[str, Any]], out_path: Path) -> None:
     fieldnames = [
         "run_id",
         "run_dir",
+        "run_group",
         "condition",
         "seed",
         "backend",
@@ -242,9 +270,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect paper Week-1 run artifacts into one CSV")
     parser.add_argument(
         "--index",
+        action="append",
         type=Path,
-        default=None,
+        default=[],
         help="CSV index from scripts/paper_matrix.sh (condition/seed/run_dir mapping)",
+    )
+    parser.add_argument(
+        "--index-glob",
+        action="append",
+        default=[],
+        help="Glob for index CSV paths (can be repeated)",
     )
     parser.add_argument(
         "--run-dir",
@@ -264,10 +299,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if args.index is None and not args.run_dir:
+    if not args.index and not args.index_glob and not args.run_dir:
         raise SystemExit("Provide --index or at least one --run-dir")
 
-    rows = collect_rows(args.index, args.run_dir)
+    rows = collect_rows(args.index, args.index_glob, args.run_dir)
     write_csv(rows, args.out)
     print(f"Wrote: {args.out}")
     print(f"Rows: {len(rows)}")
