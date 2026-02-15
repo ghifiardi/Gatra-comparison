@@ -97,6 +97,27 @@ One-shot deploy + verify:
 PROJECT_ID=gatra-prd-c335 bash scripts/deploy_queue.sh
 ```
 
+## External Share (Static Sanitized Exports)
+
+Generate daily sanitized CSV/JSON artifacts from the safe BigQuery view (no live backend required):
+
+```bash
+make export_sanitized_artifacts BQ_PROJECT=gatra-prd-c335
+```
+
+Output directory:
+- `reports/public_exports/<snapshot_dt>/worklist_<snapshot_dt>.csv`
+- `reports/public_exports/<snapshot_dt>/worklist_<snapshot_dt>.json`
+- `reports/public_exports/<snapshot_dt>/daily_kpi_30d_<snapshot_dt>.csv`
+- `reports/public_exports/<snapshot_dt>/daily_kpi_30d_<snapshot_dt>.json`
+- `reports/public_exports/<snapshot_dt>/manifest.json`
+
+Optional publish to GCS:
+
+```bash
+PROJECT_ID=gatra-prd-c335 PUBLISH_BUCKET=<bucket-name> bash scripts/export_sanitized_artifacts.sh
+```
+
 By default, uses a toy dataset generator (configs/data.yaml: dataset.source=toy).
 Replace data loader in data/loaders.py to read parquet/csv/bq.
 
