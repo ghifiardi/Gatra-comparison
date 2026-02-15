@@ -18,9 +18,11 @@ SAFE_VIEW = f"`{PROJECT}.{DATASET}.vw_ada_queue_streamlit_safe`"
 # - Streamlit Cloud: provide [gcp_service_account] in secrets
 # - Cloud Run/local ADC: fall back to default credentials
 if "gcp_service_account" in st.secrets:
-    creds = service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call]
-        st.secrets["gcp_service_account"]
+    from_sa_info = cast(
+        Callable[[object], service_account.Credentials],
+        service_account.Credentials.from_service_account_info,
     )
+    creds = from_sa_info(st.secrets["gcp_service_account"])
     client = bigquery.Client(credentials=creds, project=creds.project_id)
 else:
     adc_creds, adc_project = google_auth_default()
