@@ -1,8 +1,8 @@
+import os
 from typing import Callable, TypeVar, cast
 
 import pandas as pd
 import streamlit as st
-from google.auth import default as google_auth_default
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -14,22 +14,32 @@ PROJECT = "gatra-prd-c335"
 DATASET = "gatra_database"
 SAFE_VIEW = f"`{PROJECT}.{DATASET}.vw_ada_queue_streamlit_safe`"
 
-# Auth:
-# - Streamlit Cloud: provide [gcp_service_account] in secrets
-# - Cloud Run/local ADC: fall back to default credentials
-if "gcp_service_account" in st.secrets:
-    from_sa_info = cast(
-        Callable[[object], service_account.Credentials],
-        service_account.Credentials.from_service_account_info,
-    )
-    creds = from_sa_info(st.secrets["gcp_service_account"])
-    client = bigquery.Client(credentials=creds, project=creds.project_id)
-else:
-    adc_creds, adc_project = google_auth_default()
-    client = bigquery.Client(
-        credentials=adc_creds,
-        project=adc_project or PROJECT,
-    )
+
+def get_bq_client() -> bigquery.Client:
+    project = os.getenv("GCP_PROJECT", PROJECT)
+    if "gcp_service_account" in st.secrets:
+        from_sa_info = cast(
+            Callable[[object], service_account.Credentials],
+            service_account.Credentials.from_service_account_info,
+        )
+        creds = from_sa_info(st.secrets["gcp_service_account"])
+        return bigquery.Client(project=project, credentials=creds)
+
+    # Cloud Run runtime uses attached service account via ADC.
+    if os.getenv("K_SERVICE"):
+        return bigquery.Client(project=project)
+
+    # Local/dev path (expects `gcloud auth application-default login`).
+    return bigquery.Client(project=project)
+
+
+try:
+    client = get_bq_client()
+except Exception:
+    st.error("This deployment can't access BigQuery (missing GCP credentials).")
+    st.info("Use the Cloud Run URL deployment instead.")
+    st.info("For local development, run `gcloud auth application-default login` then retry.")
+    st.stop()
 
 st.title("ADA Top-200 Queue (per snapshot_dt)")
 
@@ -37,7 +47,7 @@ st.title("ADA Top-200 Queue (per snapshot_dt)")
 @cast(Callable[[F], F], st.cache_data(ttl=300))
 def load_dates() -> pd.DataFrame:
     query = f"SELECT DISTINCT snapshot_dt FROM {SAFE_VIEW} ORDER BY snapshot_dt DESC"
-    return client.query(query).to_dataframe()
+    return client.query(query).to_dataframe(create_bqstorage_client=False)
 
 
 @cast(Callable[[F], F], st.cache_data(ttl=300))
@@ -51,7 +61,7 @@ def load_queue(snapshot_dt: str) -> pd.DataFrame:
     job_config = bigquery.QueryJobConfig(
         query_parameters=[bigquery.ScalarQueryParameter("dt", "STRING", snapshot_dt)]
     )
-    return client.query(query, job_config=job_config).to_dataframe()
+    return client.query(query, job_config=job_config).to_dataframe(create_bqstorage_client=False)
 
 
 dates_df = load_dates()
