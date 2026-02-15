@@ -1,3 +1,4 @@
+.PHONY: format lint test train_a train_b eval serve dev contract
 PY ?= python3.11
 DATA_CONFIG ?= configs/data.yaml
 IFOREST_CONFIG ?= configs/iforest.yaml
@@ -37,8 +38,14 @@ train_a:
 	poetry run train_a --config configs/ppo.yaml --data-config configs/data.yaml
 
 eval:
-	poetry run eval_h2h --eval-config configs/eval.yaml --data-config configs/data.yaml \
-		--iforest-config configs/iforest.yaml --ppo-config configs/ppo.yaml
+	@if [ -n "$(CONTRACT_DIR)" ]; then \
+		poetry run eval_h2h --eval-config configs/eval.yaml --data-config configs/data.yaml \
+			--iforest-config configs/iforest.yaml --ppo-config configs/ppo.yaml \
+			--contract-dir "$(CONTRACT_DIR)"; \
+	else \
+		poetry run eval_h2h --eval-config configs/eval.yaml --data-config configs/data.yaml \
+			--iforest-config configs/iforest.yaml --ppo-config configs/ppo.yaml; \
+	fi
 
 serve:
 	poetry run serve --config configs/serving.yaml --data-config configs/data.yaml
@@ -237,6 +244,13 @@ verify_queue:
 dev:
 	@$(PY) -m pip install -U pip
 	@$(PY) -m pip install -U ruff
+
+contract:
+	@python3.11 - <<'PY'
+	from data.contract_export import export_frozen_contract
+	paths = export_frozen_contract("configs/data.yaml")
+	print(f"Contract saved -> {paths.root}")
+	PY
 
 pytest:
 	@PYTHONPATH="$(CURDIR)" $(PY) -m pytest -q

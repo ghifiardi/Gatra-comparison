@@ -39,6 +39,7 @@ import os
 import json
 from typing import Any, cast
 import numpy as np
+from typing import Any, cast
 from numpy.typing import NDArray
 import yaml
 import torch
@@ -79,6 +80,9 @@ def _prepare_dataset(
 
         with torch.no_grad():
             probs = actor(s_t.unsqueeze(0)).squeeze(0)
+            dist = cast(Any, torch.distributions.Categorical)(probs=probs)
+            a = dist.sample()
+            logp = dist.log_prob(a)
             dist = torch.distributions.Categorical(probs=probs)  # type: ignore[no-untyped-call]
             a = dist.sample()  # type: ignore[no-untyped-call]
             logp = dist.log_prob(a)  # type: ignore[no-untyped-call]
