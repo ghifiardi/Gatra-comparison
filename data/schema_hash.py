@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import hashlib
+import hashlib
+import json
 from typing import Any, cast
 
 import yaml
 
 
 FEATURE_SCHEMA_VERSION = "v0.2"
+FEATURE_SCHEMA_VERSION = "v0.3"
 
 
 def _load_yaml(path: str) -> dict[str, Any]:

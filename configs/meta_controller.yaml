@@ -1,0 +1,50 @@
+meta_controller:
+  enabled: true
+  fail_on_infeasible: false
+
+  selection_split: val
+
+  candidates:
+    source: morl_config_grid
+    explicit: []
+
+  objective:
+    primary: pr_auc
+    tie_breaker: alerts_per_1k
+    utility:
+      pr_auc: 1.0
+      f1: 0.0
+      recall: 0.0
+      alerts_per_1k: -0.01
+
+  constraints:
+    mode: hard          # hard | soft
+    alerts_per_1k_max: 30.0
+    recall_min: 0.60
+    precision_min: null
+    pr_auc_min: null
+    soft_penalty:
+      lambda_recall: 5.0
+      lambda_alerts: 0.05
+      lambda_precision: 1.0
+      lambda_pr_auc: 1.0
+
+  relaxation:
+    enabled: true
+    stop_on_first_feasible: true
+    schedule:
+      - { recall_min: 0.55, alerts_per_1k_max: 40.0 }
+      - { recall_min: 0.50, alerts_per_1k_max: 60.0 }
+      - { recall_min: 0.40, alerts_per_1k_max: 120.0 }
+
+  method:
+    name: greedy
+    params:
+      rounds: 20
+      explore_frac: 0.2
+      ucb_c: 1.0
+      thompson_sigma: 0.05
+
+  outputs:
+    write_selected_weight: true
+    write_selection_report: true

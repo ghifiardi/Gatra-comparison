@@ -14,7 +14,30 @@ __pycache__/
 # generated artifacts/reports
 artifacts/
 reports/
+**/*.tgz
+**/*.parquet
+**/*.npy
 
 # Office temp/lock files
 docs/~$*.docx
 ~$*.docx
+
+# local-only / developer tooling
+.agents/
+claude_tasks/
+data/local/
+
+# local-only / developer tooling
+.agents/
+claude_tasks/
+data/local/
+
+# Local agent task specs (not shipped)
+codex_tasks/
+claude_tasks/
+.agents/
+data/local/
+
+# credential key material (never commit)
+*sa*.json
+*key*.json

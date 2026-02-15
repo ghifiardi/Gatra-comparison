@@ -1,0 +1,7 @@
+join:
+  split: test
+  priority: ["alarm_id", "row_key", "time_window"]
+  collision_rule: first  # first | most_recent
+  time_window_fallback:
+    enabled: false
+    window_seconds: 3600

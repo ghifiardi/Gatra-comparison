@@ -1,0 +1,53 @@
+morl:
+  enabled: true
+  k_objectives: 2
+
+  objectives:
+    - name: time_to_triage_seconds
+      type: time_to_triage_seconds
+      direction: minimize
+      norm: none
+      ttt_alert_penalty: -1.0
+    - name: detection_coverage
+      type: detection_coverage
+      direction: maximize
+      norm: none
+      coverage_alert_reward: 1.0
+
+  realdata_objectives:
+    enabled: true
+    normalization: none
+    source_fields: [session_id, event_timestamp_epoch_s, page, action]
+
+  preference_conditioning:
+    enabled: true
+    method: concat_to_state
+    dirichlet_alpha: [0.7, 0.7]
+    sample_per: episode
+
+  training:
+    algorithm: moppo
+    epochs: 5
+    batch_size: 256
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_eps: 0.2
+    entropy_coef: 0.01
+    value_coef: 0.5
+    lr: 0.0003
+    hidden: [256, 128, 64]
+
+  eval:
+    weight_sweep:
+      enabled: true
+      grid:
+        - [0.8, 0.2]
+        - [0.6, 0.4]
+        - [0.4, 0.6]
+        - [0.2, 0.8]
+    pareto:
+      enabled: true
+      primary_metrics: ["pr_auc", "f1", "alerts_per_1k"]
+    hypervolume:
+      enabled: true
+      reference: [0.0, 0.0, 1000.0]

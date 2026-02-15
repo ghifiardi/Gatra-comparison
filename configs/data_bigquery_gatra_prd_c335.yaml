@@ -1,0 +1,40 @@
+dataset:
+  source: "bigquery"  # "toy" | "csv" | "parquet" | "bigquery" (stub)
+  bq_project: "gatra-prd-c335"
+  bq_dataset: "gatra_database"
+  bq_events_table: "activity_logs"
+  bq_labels_table: "ada_feedback"
+  # Optional smoke cap for early validation once BigQuery loader is implemented.
+  limit: 10000
+  events:
+    event_ts_col: "event_timestamp"
+    session_id_col: "session_id"
+    user_col: "user"
+    action_col: "action"
+    page_col: "page"
+    details_col: "details"
+    row_key:
+      mode: "derived_sha1"
+      cols:
+        - "session_id"
+        - "event_timestamp"
+        - "user"
+        - "action"
+        - "page"
+        - "details"
+  labels:
+    alarm_id_col: "alarm_id"
+    case_class_col: "case_class"
+    created_at_col: "created_at"
+    event_id_col: "id"
+
+splits:
+  train:
+    start: "2025-11-04"
+    end: "2025-12-05"
+  val:
+    start: "2025-12-06"
+    end: "2025-12-15"
+  test:
+    start: "2025-12-16"
+    end: "2025-12-22"

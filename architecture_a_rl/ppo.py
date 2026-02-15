@@ -28,6 +28,8 @@ def ppo_update(
     probs = actor(states)
     dist = cast(Any, torch.distributions.Categorical)(probs=probs)
     logp = dist.log_prob(actions)
+    dist = torch.distributions.Categorical(probs=probs)  # type: ignore[no-untyped-call]
+    logp = dist.log_prob(actions)  # type: ignore[no-untyped-call]
 
     ratio = torch.exp(logp - old_logp)
     adv = returns - critic(states).detach()

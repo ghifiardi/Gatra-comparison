@@ -1,0 +1,74 @@
+robustness:
+  enabled: true
+  seed: 42
+
+  # Controls for "quick" mode in robustness runner
+  quick:
+    max_variants: 3
+
+  variants:
+    - name: baseline
+      kind: none
+
+    # Missingness injection (MCAR)
+    - name: missing_mcar_05
+      kind: missingness
+      rate: 0.05
+      strategy: mcar     # mcar | topk
+      fill: zero         # zero | mean | median
+
+    - name: missing_mcar_20
+      kind: missingness
+      rate: 0.20
+      strategy: mcar
+      fill: zero
+
+    # Additive feature noise
+    - name: noise_small
+      kind: noise
+      sigma: 0.01
+      distribution: gaussian   # gaussian | laplace
+      clamp: true
+
+    - name: noise_medium
+      kind: noise
+      sigma: 0.05
+      distribution: gaussian
+      clamp: true
+
+    # Time slicing within test split (covariate shift proxy)
+    - name: time_slice
+      kind: time_slice
+      slices:
+        - { label: early, frac_start: 0.0, frac_end: 0.5 }
+        - { label: late,  frac_start: 0.5, frac_end: 1.0 }
+
+    # Label delay simulation (contract-only)
+    - name: label_delay_10pct_benign
+      kind: label_delay
+      fraction: 0.10
+      policy: treat_as_benign   # treat_as_benign | treat_as_unknown | drop
+
+    - name: label_delay_20pct_unknown
+      kind: label_delay
+      fraction: 0.20
+      policy: treat_as_unknown
+
+    # Label-created-time realism (contract-only)
+    - name: label_delay_created_7d_unknown
+      kind: label_delay
+      delay: "7d"
+      policy: treat_as_unknown
+
+    - name: label_delay_created_12h_benign
+      kind: label_delay
+      delay: "12h"
+      policy: treat_as_benign
+
+    # Combined stress
+    - name: stress_combined
+      kind: compose
+      steps:
+        - { kind: missingness, rate: 0.10, strategy: mcar, fill: zero }
+        - { kind: noise, sigma: 0.02, distribution: gaussian, clamp: true }
+        - { kind: label_delay, delay: "30m", policy: treat_as_unknown }

@@ -1,0 +1,52 @@
+morl:
+  enabled: true
+  k_objectives: 3
+
+  objectives:
+    - name: detect
+      type: classification
+      tp: 1.0
+      fn: -1.0
+      fp: 0.0
+      tn: 0.0
+
+    - name: fp_cost
+      type: fp_penalty
+      fp_penalty: -0.2
+
+    - name: analyst_cost
+      type: per_alert_cost
+      per_alert_penalty: -0.05
+
+  preference_conditioning:
+    enabled: true
+    method: concat_to_state
+    dirichlet_alpha: [0.7, 0.7, 0.7]
+    sample_per: episode
+
+  training:
+    algorithm: moppo
+    epochs: 5
+    batch_size: 256
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_eps: 0.2
+    entropy_coef: 0.01
+    value_coef: 0.5
+    lr: 0.0003
+    hidden: [256, 128, 64]
+
+  eval:
+    weight_sweep:
+      enabled: true
+      grid:
+        - [0.7, 0.2, 0.1]
+        - [0.5, 0.3, 0.2]
+        - [0.3, 0.5, 0.2]
+        - [0.2, 0.2, 0.6]
+    pareto:
+      enabled: true
+      primary_metrics: ["pr_auc", "f1", "alerts_per_1k"]
+    hypervolume:
+      enabled: true
+      reference: [0.0, 0.0, 1000.0]
