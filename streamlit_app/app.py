@@ -37,7 +37,7 @@ st.title("ADA Top-200 Queue (per snapshot_dt)")
 @cast(Callable[[F], F], st.cache_data(ttl=300))
 def load_dates() -> pd.DataFrame:
     query = f"SELECT DISTINCT snapshot_dt FROM {SAFE_VIEW} ORDER BY snapshot_dt DESC"
-    return client.query(query).to_dataframe()
+    return client.query(query).to_dataframe(create_bqstorage_client=False)
 
 
 @cast(Callable[[F], F], st.cache_data(ttl=300))
@@ -51,7 +51,7 @@ def load_queue(snapshot_dt: str) -> pd.DataFrame:
     job_config = bigquery.QueryJobConfig(
         query_parameters=[bigquery.ScalarQueryParameter("dt", "STRING", snapshot_dt)]
     )
-    return client.query(query, job_config=job_config).to_dataframe()
+    return client.query(query, job_config=job_config).to_dataframe(create_bqstorage_client=False)
 
 
 dates_df = load_dates()
