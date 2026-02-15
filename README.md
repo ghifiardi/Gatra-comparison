@@ -76,6 +76,27 @@ If these are missing, likely causes:
 Additional guidance:
 - `docs/v0.10_option2_production_default.md`
 
+## Queue Deploy (BigQuery)
+
+Repeatable SQL deployment is versioned under `sql/`:
+- `sql/10_deploy_prod_queue_top200.sql`
+- `sql/20_verify_prod_queue.sql`
+- `sql/30_deploy_safe_view.sql`
+
+Canonical commands:
+
+```bash
+make deploy_queue BQ_PROJECT=gatra-prd-c335
+make deploy_safe_view BQ_PROJECT=gatra-prd-c335
+make verify_queue BQ_PROJECT=gatra-prd-c335
+```
+
+One-shot deploy + verify:
+
+```bash
+PROJECT_ID=gatra-prd-c335 bash scripts/deploy_queue.sh
+```
+
 By default, uses a toy dataset generator (configs/data.yaml: dataset.source=toy).
 Replace data loader in data/loaders.py to read parquet/csv/bq.
 

@@ -11,6 +11,7 @@ POLICY_EVAL_CONFIG ?= configs/policy_eval.yaml
 META_STABILITY_CONFIG ?= configs/meta_stability.yaml
 OUT_ROOT ?= reports/runs
 CONTRACT_CACHE_ROOT ?= reports/contracts_cache
+BQ_PROJECT ?= gatra-prd-c335
 PAPER_INDEX ?= reports/paper_results/week1_run_index.csv
 PAPER_INDEX_CSV ?= reports/paper_results/week1_run_index_csv.csv
 PAPER_INDEX_BQ ?= reports/paper_results/week1_run_index_bq.csv
@@ -18,7 +19,7 @@ PAPER_RESULTS_OUT ?= reports/paper_results/paper_week1_results.csv
 PAPER_CSV_SEEDS ?= 42,1337,2026
 PAPER_BQ_SEEDS ?= 42
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick run_morl_policy_robust_quick meta_stability run_meta_stability_quick paper_week1_csv paper_week1_bq paper_collect_week1
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick run_morl_policy_robust_quick meta_stability run_meta_stability_quick paper_week1_csv paper_week1_bq paper_collect_week1 deploy_queue deploy_safe_view verify_queue
 
 format:
 	@$(PY) -m ruff format .
@@ -223,6 +224,15 @@ paper_collect_week1:
 	  --index $(PAPER_INDEX_CSV) \
 	  --index $(PAPER_INDEX_BQ) \
 	  --out $(PAPER_RESULTS_OUT)
+
+deploy_queue:
+	bq --project_id=$(BQ_PROJECT) query --use_legacy_sql=false < sql/10_deploy_prod_queue_top200.sql
+
+deploy_safe_view:
+	bq --project_id=$(BQ_PROJECT) query --use_legacy_sql=false < sql/30_deploy_safe_view.sql
+
+verify_queue:
+	bq --project_id=$(BQ_PROJECT) query --use_legacy_sql=false < sql/20_verify_prod_queue.sql
 
 dev:
 	@$(PY) -m pip install -U pip
