@@ -1,8 +1,12 @@
+from typing import Callable, TypeVar, cast
+
 import pandas as pd
 import streamlit as st
 from google.auth import default as google_auth_default
 from google.cloud import bigquery
 from google.oauth2 import service_account
+
+F = TypeVar("F", bound=Callable[..., object])
 
 st.set_page_config(page_title="ADA Top-K Queue", layout="wide")
 
@@ -26,13 +30,13 @@ else:
 st.title("ADA Top-200 Queue (per snapshot_dt)")
 
 
-@st.cache_data(ttl=60)
+@cast(Callable[[F], F], st.cache_data(ttl=300))
 def load_dates() -> pd.DataFrame:
     query = f"SELECT DISTINCT snapshot_dt FROM {SAFE_VIEW} ORDER BY snapshot_dt DESC"
     return client.query(query).to_dataframe()
 
 
-@st.cache_data(ttl=60)
+@cast(Callable[[F], F], st.cache_data(ttl=300))
 def load_queue(snapshot_dt: str) -> pd.DataFrame:
     query = f"""
     SELECT *
