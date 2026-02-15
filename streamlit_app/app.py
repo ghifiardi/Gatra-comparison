@@ -1,4 +1,6 @@
 import os
+import hmac
+import hashlib
 from typing import Callable, TypeVar, cast
 
 import pandas as pd
@@ -13,6 +15,45 @@ st.set_page_config(page_title="ADA Top-K Queue", layout="wide")
 PROJECT = "gatra-prd-c335"
 DATASET = "gatra_database"
 SAFE_VIEW = f"`{PROJECT}.{DATASET}.vw_ada_queue_streamlit_safe`"
+
+
+def _hash_password(password: str, salt: str) -> str:
+    return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+
+
+def require_password() -> None:
+    """
+    Password gate for public Cloud Run.
+    Required env vars:
+      APP_PASSWORD_SALT
+      APP_PASSWORD_HASH  (sha256(salt + password))
+    """
+    salt = os.getenv("APP_PASSWORD_SALT", "")
+    expected = os.getenv("APP_PASSWORD_HASH", "")
+    if not salt or not expected:
+        st.error("Password gate not configured. Missing APP_PASSWORD_SALT / APP_PASSWORD_HASH.")
+        st.stop()
+
+    if st.session_state.get("authed", False):
+        return
+
+    st.title("ADA Top-K Queue")
+    st.caption("Password required")
+    password = st.text_input("Password", type="password")
+    if not password:
+        st.stop()
+
+    got = _hash_password(password, salt)
+    if hmac.compare_digest(got, expected):
+        st.session_state["authed"] = True
+        st.success("Access granted.")
+        st.rerun()
+
+    st.error("Wrong password.")
+    st.stop()
+
+
+require_password()
 
 
 def get_bq_client() -> bigquery.Client:
