@@ -98,6 +98,18 @@ Generate paper tables bundle for a run (statistical table + flattened results ro
 make paper_tables RUN_ID=<run_id>
 ```
 
+Generate paper-ready Results paragraph:
+
+```bash
+make paper_results_paragraph RUN_ID=<run_id>
+```
+
+Generate K-sweep artifacts (defaults: `50,100,200`):
+
+```bash
+make paper_k_sweep RUN_ID=<run_id>
+```
+
 ## Queue Deploy (BigQuery)
 
 Repeatable SQL deployment is versioned under `sql/`:

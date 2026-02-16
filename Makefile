@@ -20,10 +20,11 @@ PAPER_INDEX_BQ ?= reports/paper_results/week1_run_index_bq.csv
 PAPER_RESULTS_OUT ?= reports/paper_results/paper_week1_results.csv
 PAPER_ARTIFACTS_ROOT ?= reports/paper_artifacts
 PAPER_TABLES_ROOT ?= reports/paper_results/tables
+K_SWEEP_VALUES ?= 50,100,200
 PAPER_CSV_SEEDS ?= 42,1337,2026
 PAPER_BQ_SEEDS ?= 42
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick run_morl_policy_robust_quick meta_stability run_meta_stability_quick run_statistical_analysis paper_pin_evidence paper_tables paper_week1_csv paper_week1_bq paper_collect_week1 deploy_queue deploy_safe_view verify_queue export_sanitized_artifacts
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick run_morl_policy_robust_quick meta_stability run_meta_stability_quick run_statistical_analysis paper_pin_evidence paper_results_paragraph paper_k_sweep paper_tables paper_week1_csv paper_week1_bq paper_collect_week1 deploy_queue deploy_safe_view verify_queue export_sanitized_artifacts
 
 format:
 	@$(PY) -m ruff format .
@@ -230,6 +231,22 @@ paper_pin_evidence:
 	@test -n "$(RUN_ID)" || (echo "RUN_ID is required, e.g. make paper_pin_evidence RUN_ID=20260216T083354Z" && exit 1)
 	RUN_ID=$(RUN_ID) OUT_ROOT=$(PAPER_ARTIFACTS_ROOT) bash scripts/pin_paper_evidence.sh
 
+paper_results_paragraph:
+	@test -n "$(RUN_ID)" || (echo "RUN_ID is required, e.g. make paper_results_paragraph RUN_ID=20260216T083354Z" && exit 1)
+	PYTHONPATH=. $(PY) scripts/render_results_paragraph.py \
+	  --row-csv $(PAPER_TABLES_ROOT)/$(RUN_ID)/paper_results_row.csv \
+	  --stats-json reports/runs/$(RUN_ID)/statistical_analysis.json \
+	  --out $(PAPER_TABLES_ROOT)/$(RUN_ID)/results_paragraph.md
+
+paper_k_sweep:
+	@test -n "$(RUN_ID)" || (echo "RUN_ID is required, e.g. make paper_k_sweep RUN_ID=20260216T083354Z" && exit 1)
+	PYTHONPATH=. $(PY) scripts/build_k_sweep.py \
+	  --run-dir reports/runs/$(RUN_ID) \
+	  --k-values $(K_SWEEP_VALUES) \
+	  --out-csv $(PAPER_TABLES_ROOT)/$(RUN_ID)/k_sweep.csv \
+	  --out-md $(PAPER_TABLES_ROOT)/$(RUN_ID)/k_sweep.md \
+	  --out-tex $(PAPER_TABLES_ROOT)/$(RUN_ID)/k_sweep.tex
+
 paper_tables:
 	@test -n "$(RUN_ID)" || (echo "RUN_ID is required, e.g. make paper_tables RUN_ID=20260216T083354Z" && exit 1)
 	$(MAKE) run_statistical_analysis RUN_ID=$(RUN_ID)
@@ -238,6 +255,8 @@ paper_tables:
 	PYTHONPATH=. $(PY) scripts/collect_paper_results.py \
 	  --run-dir reports/runs/$(RUN_ID) \
 	  --out $(PAPER_TABLES_ROOT)/$(RUN_ID)/paper_results_row.csv
+	$(MAKE) paper_results_paragraph RUN_ID=$(RUN_ID)
+	$(MAKE) paper_k_sweep RUN_ID=$(RUN_ID)
 	@echo "Wrote paper tables bundle: $(PAPER_TABLES_ROOT)/$(RUN_ID)"
 
 paper_week1_csv:
