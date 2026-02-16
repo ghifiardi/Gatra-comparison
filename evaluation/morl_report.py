@@ -38,6 +38,32 @@ def _load_contract_split(
     return x, y
 
 
+def score_morl_weight_on_split(
+    contract_dir: str,
+    morl_model_dir: str,
+    morl_cfg_path: str,
+    split: str,
+    w: Sequence[float],
+) -> tuple[NDArray[np.int_], NDArray[np.float64]]:
+    morl_cfg = _load_morl_cfg(morl_cfg_path)
+    k = int(morl_cfg.get("k_objectives", 3))
+    train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
+    hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
+    actor, _ = _load_actor(morl_model_dir=morl_model_dir, hidden=hidden, k_objectives=k)
+
+    x_split, y_split = _load_contract_split(contract_dir, split)
+    w_arr = normalize_weight_grid([list(w)], k)[0]
+
+    with torch.no_grad():
+        states = torch.tensor(x_split, dtype=torch.float32)
+        w_rep = np.repeat(w_arr[None, :], x_split.shape[0], axis=0).astype(np.float32)
+        w_t = torch.tensor(w_rep, dtype=torch.float32)
+        xw = torch.cat([states, w_t], dim=1)
+        probs = actor(xw).cpu().numpy()
+        y_score = probs[:, 1].astype(np.float64)
+    return y_split, y_score
+
+
 def _safe_metric_value(v: float) -> float:
     return float(v) if np.isfinite(v) else 0.0
 
@@ -236,24 +262,24 @@ def evaluate_morl_weight_on_split(
     if len(objectives) != k:
         raise ValueError(f"Expected {k} objectives, got {len(objectives)}")
 
-    train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
-    hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
     realdata_cfg = cast(dict[str, Any], morl_cfg.get("realdata_objectives", {}))
     legacy_default_norm = str(realdata_cfg.get("normalization", "none"))
     normalization_cfg = cast(dict[str, Any], morl_cfg.get("normalization", {}))
-    actor, seed = _load_actor(morl_model_dir=morl_model_dir, hidden=hidden, k_objectives=k)
-
-    x_split, y_split = _load_contract_split(contract_dir, split)
+    seed = 0
+    morl_meta_path = os.path.join(morl_model_dir, "morl_meta.json")
+    if os.path.exists(morl_meta_path):
+        with open(morl_meta_path, "r") as f:
+            morl_meta = cast(dict[str, Any], json.load(f))
+        seed = int(morl_meta.get("seed", 0))
+    y_split, y_score = score_morl_weight_on_split(
+        contract_dir=contract_dir,
+        morl_model_dir=morl_model_dir,
+        morl_cfg_path=morl_cfg_path,
+        split=split,
+        w=w,
+    )
     w_arr = normalize_weight_grid([list(w)], k)[0]
-
-    with torch.no_grad():
-        states = torch.tensor(x_split, dtype=torch.float32)
-        w_rep = np.repeat(w_arr[None, :], x_split.shape[0], axis=0).astype(np.float32)
-        w_t = torch.tensor(w_rep, dtype=torch.float32)
-        xw = torch.cat([states, w_t], dim=1)
-        probs = actor(xw).cpu().numpy()
-        y_score = probs[:, 1].astype(np.float64)
-        actions = (y_score >= 0.5).astype(np.int_)
+    actions = (y_score >= 0.5).astype(np.int_)
 
     base_metrics = classification_metrics(y_split, y_score, threshold=0.5)
     metrics = {

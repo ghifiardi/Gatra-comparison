@@ -56,6 +56,7 @@ def build_run_manifest(
     join_diagnostics: dict[str, Any] | None = None,
     policy_eval: dict[str, Any] | None = None,
     meta_stability: dict[str, Any] | None = None,
+    statistical_analysis: dict[str, Any] | None = None,
     contract_cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset = data_cfg.get("dataset", {})
@@ -97,6 +98,7 @@ def build_run_manifest(
         "join_diagnostics": join_diagnostics or {},
         "policy_eval": policy_eval or {},
         "meta_stability": meta_stability or {},
+        "statistical_analysis": statistical_analysis or {},
     }
     return manifest
 

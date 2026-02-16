@@ -67,6 +67,10 @@ Artifact contract (minimum expected outputs for `run_morl_policy_quick`):
 - `reports/runs/<run_id>/eval/morl/meta_feasibility.json`
 - `reports/runs/<run_id>/eval/morl/morl_selected_test.json`
 - `reports/runs/<run_id>/report/run_manifest.json`
+- `reports/runs/<run_id>/morl_selected_test.json`
+- `reports/runs/<run_id>/classical_test.json`
+- `reports/runs/<run_id>/statistical_analysis.json`
+- `reports/runs/<run_id>/table1_statistical.tex`
 
 If these are missing, likely causes:
 - The run used a different `run_id` than expected.
@@ -75,6 +79,12 @@ If these are missing, likely causes:
 
 Additional guidance:
 - `docs/v0.10_option2_production_default.md`
+
+Run statistical significance analysis (paired test + bootstrap CI + correction):
+
+```bash
+make run_statistical_analysis RUN_ID=<run_id>
+```
 
 ## Queue Deploy (BigQuery)
 

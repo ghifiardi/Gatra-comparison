@@ -28,7 +28,11 @@ from data.contract_export import export_frozen_contract_to_dir
 from data.join import build_join_map
 from evaluation.metrics import classification_metrics
 from evaluation.meta_selection_report import write_meta_selection_artifacts
-from evaluation.morl_report import evaluate_morl_weight_on_split, run_morl_weight_sweep
+from evaluation.morl_report import (
+    evaluate_morl_weight_on_split,
+    run_morl_weight_sweep,
+    score_morl_weight_on_split,
+)
 from evaluation.policy_eval import run_policy_eval
 from evaluation.meta_stability import run_stability_suite, write_stability_artifacts
 from evaluation.robustness import run_robustness_suite
@@ -41,6 +45,7 @@ from runs.reporting import (
     utc_run_id,
     write_run_manifest,
 )
+from statistical_significance import bootstrap_metric_samples, run_analysis
 
 
 app = typer.Typer()
@@ -171,6 +176,30 @@ def _load_contract_test(
     x128 = np.load(os.path.join(contract_dir, "features_v128_test.npy")).astype(np.float32)
     y = np.load(os.path.join(contract_dir, "y_true.npy")).astype(np.int_)
     return x7, x128, y
+
+
+def _load_ttt_minutes(
+    contract_dir: str, split: str, expected_rows: int
+) -> NDArray[np.float64] | None:
+    start_path = os.path.join(contract_dir, f"episode_start_ts_{split}.npy")
+    end_path = os.path.join(contract_dir, f"episode_end_ts_{split}.npy")
+    if not (os.path.exists(start_path) and os.path.exists(end_path)):
+        return None
+    starts = np.load(start_path).astype(np.float64)
+    ends = np.load(end_path).astype(np.float64)
+    if starts.shape[0] != expected_rows or ends.shape[0] != expected_rows:
+        return None
+    duration_minutes = np.maximum((ends - starts) / 60.0, 0.0)
+    return duration_minutes.astype(np.float64)
+
+
+def _metric_samples_to_json(
+    payload: dict[str, NDArray[np.float64]],
+) -> dict[str, list[float]]:
+    out: dict[str, list[float]] = {}
+    for key, values in payload.items():
+        out[str(key)] = [float(v) for v in values.tolist()]
+    return out
 
 
 def _load_iforest_artifacts(model_dir: str) -> tuple[IForestModel, Preprocessor, float]:
@@ -334,6 +363,10 @@ def main(
     policy_eval_summary: dict[str, Any] = {}
     policy_eval_json_path: str | None = None
     policy_eval_md_path: str | None = None
+    statistical_analysis_path: str | None = None
+    statistical_table_path: str | None = None
+    classical_test_path: str | None = None
+    morl_selected_root_path: str | None = None
 
     contract_source_dir: str | None = None
     contract_cache_hit: bool = False
@@ -510,6 +543,94 @@ def main(
         ppo_cfg=ppo_cfg,
         out_dir=eval_dir,
     )
+
+    if (
+        morl_enabled
+        and meta_enabled
+        and selected_weight is not None
+        and selected_test_path is not None
+        and os.path.exists(selected_test_path)
+    ):
+        x7_test_stat, _, y_test_stat = _load_contract_test(contract_dir)
+        if_scores_test_stat, if_threshold_stat = _score_iforest(iforest_dir, x7_test_stat)
+        y_morl_stat, morl_scores_test_stat = score_morl_weight_on_split(
+            contract_dir=contract_dir,
+            morl_model_dir=morl_dir,
+            morl_cfg_path=config_paths["morl"],
+            split="test",
+            w=selected_weight,
+        )
+        if y_morl_stat.shape[0] != y_test_stat.shape[0]:
+            raise ValueError("MORL test labels are not aligned with contract test labels")
+
+        ttt_minutes = _load_ttt_minutes(
+            contract_dir=contract_dir, split="test", expected_rows=int(y_test_stat.shape[0])
+        )
+        n_bootstrap = 1000
+        morl_metric_samples = bootstrap_metric_samples(
+            y_true=y_morl_stat,
+            y_score=morl_scores_test_stat,
+            threshold=0.5,
+            n_bootstrap=n_bootstrap,
+            seed=seed_value + 701,
+            ttt_minutes=ttt_minutes,
+        )
+        classical_metric_samples = bootstrap_metric_samples(
+            y_true=y_test_stat,
+            y_score=if_scores_test_stat,
+            threshold=if_threshold_stat,
+            n_bootstrap=n_bootstrap,
+            seed=seed_value + 1701,
+            ttt_minutes=ttt_minutes,
+        )
+
+        with open(selected_test_path, "r") as f:
+            selected_test_payload = cast(dict[str, Any], json.load(f))
+        selected_test_payload["metric_samples"] = _metric_samples_to_json(morl_metric_samples)
+        selected_test_payload["statistical_metadata"] = {
+            "alpha": 0.05,
+            "n_bootstrap": n_bootstrap,
+            "correction_method": "bh",
+            "threshold": 0.5,
+            "sample_model": "morl_selected",
+            "ttt_source": "episode_duration_minutes" if ttt_minutes is not None else None,
+        }
+        with open(selected_test_path, "w") as f:
+            json.dump(selected_test_payload, f, indent=2)
+
+        morl_selected_root_path = os.path.join(run_root, "morl_selected_test.json")
+        with open(morl_selected_root_path, "w") as f:
+            json.dump(selected_test_payload, f, indent=2)
+
+        classical_payload: dict[str, Any] = {
+            "model": "iforest",
+            "threshold": if_threshold_stat,
+            "metrics": metrics.get("iforest", {}),
+            "metric_samples": _metric_samples_to_json(classical_metric_samples),
+            "statistical_metadata": {
+                "alpha": 0.05,
+                "n_bootstrap": n_bootstrap,
+                "correction_method": "bh",
+                "threshold": if_threshold_stat,
+                "sample_model": "iforest",
+                "ttt_source": "episode_duration_minutes" if ttt_minutes is not None else None,
+            },
+        }
+        classical_test_path = os.path.join(run_root, "classical_test.json")
+        with open(classical_test_path, "w") as f:
+            json.dump(classical_payload, f, indent=2)
+
+        statistical_analysis_path = os.path.join(run_root, "statistical_analysis.json")
+        statistical_table_path = os.path.join(run_root, "table1_statistical.tex")
+        run_analysis(
+            morl_results_path=morl_selected_root_path,
+            classical_results_path=classical_test_path,
+            output_path=statistical_analysis_path,
+            alpha=0.05,
+            n_bootstrap=n_bootstrap,
+            correction_method="bh",
+            table_output=statistical_table_path,
+        )
 
     if config_paths.get("policy_eval"):
         x7_val_pe, x128_val_pe, y_val_pe = _load_contract_split(contract_dir, "val")
@@ -699,6 +820,21 @@ def main(
             "config_sha256": meta_stability_hash,
             "output_path": os.path.relpath(meta_stability_output_path, run_root)
             if meta_stability_output_path
+            else None,
+        },
+        statistical_analysis={
+            "enabled": bool(statistical_analysis_path),
+            "analysis_path": os.path.relpath(statistical_analysis_path, run_root)
+            if statistical_analysis_path
+            else None,
+            "table_path": os.path.relpath(statistical_table_path, run_root)
+            if statistical_table_path
+            else None,
+            "morl_results_path": os.path.relpath(morl_selected_root_path, run_root)
+            if morl_selected_root_path
+            else None,
+            "classical_results_path": os.path.relpath(classical_test_path, run_root)
+            if classical_test_path
             else None,
         },
     )
