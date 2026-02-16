@@ -86,6 +86,18 @@ Run statistical significance analysis (paired test + bootstrap CI + correction):
 make run_statistical_analysis RUN_ID=<run_id>
 ```
 
+Pin canonical paper evidence artifacts for a run:
+
+```bash
+make paper_pin_evidence RUN_ID=<run_id>
+```
+
+Generate paper tables bundle for a run (statistical table + flattened results row):
+
+```bash
+make paper_tables RUN_ID=<run_id>
+```
+
 ## Queue Deploy (BigQuery)
 
 Repeatable SQL deployment is versioned under `sql/`:

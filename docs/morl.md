@@ -198,6 +198,13 @@ Manual rerun command:
 make run_statistical_analysis RUN_ID=<run_id>
 ```
 
+Paper packaging commands:
+
+```bash
+make paper_pin_evidence RUN_ID=<run_id>
+make paper_tables RUN_ID=<run_id>
+```
+
 ## Interpreting Pareto and Hypervolume
 
 Primary metrics in default config:
