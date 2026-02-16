@@ -163,9 +163,9 @@ def extract_metric_samples(payload: Mapping[str, Any]) -> dict[str, FloatArray]:
     if isinstance(metric_samples, Mapping):
         for key, value in metric_samples.items():
             if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-                vals = [float(v) for v in value if isinstance(v, (int, float))]
-                if vals:
-                    out[str(key)] = _as_float_array(vals)
+                metric_vals = [float(v) for v in value if isinstance(v, (int, float))]
+                if metric_vals:
+                    out[str(key)] = _as_float_array(metric_vals)
 
     samples = payload.get("samples")
     if isinstance(samples, Sequence) and samples and all(isinstance(s, Mapping) for s in samples):
@@ -173,15 +173,15 @@ def extract_metric_samples(payload: Mapping[str, Any]) -> dict[str, FloatArray]:
         for row in samples:
             keys.update(str(k) for k in row.keys())
         for key in keys:
-            vals: list[float] = []
+            row_vals: list[float] = []
             for row in samples:
                 if not isinstance(row, Mapping):
                     continue
                 v = row.get(key)
                 if isinstance(v, (int, float)):
-                    vals.append(float(v))
-            if vals:
-                out[key] = _as_float_array(vals)
+                    row_vals.append(float(v))
+            if row_vals:
+                out[key] = _as_float_array(row_vals)
 
     # If explicit sample payloads exist, prefer them over scalar summary fields.
     if out:
@@ -196,9 +196,9 @@ def extract_metric_samples(payload: Mapping[str, Any]) -> dict[str, FloatArray]:
             if isinstance(value, (int, float)):
                 out[skey] = _as_float_array([float(value)])
             elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-                vals = [float(v) for v in value if isinstance(v, (int, float))]
-                if vals:
-                    out[skey] = _as_float_array(vals)
+                metric_list_vals = [float(v) for v in value if isinstance(v, (int, float))]
+                if metric_list_vals:
+                    out[skey] = _as_float_array(metric_list_vals)
 
     for key, value in payload.items():
         skey = str(key)
@@ -207,9 +207,9 @@ def extract_metric_samples(payload: Mapping[str, Any]) -> dict[str, FloatArray]:
         if isinstance(value, (int, float)):
             out[skey] = _as_float_array([float(value)])
         elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-            vals = [float(v) for v in value if isinstance(v, (int, float))]
-            if vals:
-                out[skey] = _as_float_array(vals)
+            payload_vals = [float(v) for v in value if isinstance(v, (int, float))]
+            if payload_vals:
+                out[skey] = _as_float_array(payload_vals)
 
     return out
 
