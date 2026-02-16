@@ -11,6 +11,7 @@ POLICY_EVAL_CONFIG ?= configs/policy_eval.yaml
 META_STABILITY_CONFIG ?= configs/meta_stability.yaml
 OUT_ROOT ?= reports/runs
 CONTRACT_CACHE_ROOT ?= reports/contracts_cache
+RUN_ID ?=
 BQ_PROJECT ?= gatra-prd-c335
 PUBLIC_OUT_ROOT ?= reports/public_exports
 PAPER_INDEX ?= reports/paper_results/week1_run_index.csv
@@ -20,7 +21,7 @@ PAPER_RESULTS_OUT ?= reports/paper_results/paper_week1_results.csv
 PAPER_CSV_SEEDS ?= 42,1337,2026
 PAPER_BQ_SEEDS ?= 42
 
-.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick run_morl_policy_robust_quick meta_stability run_meta_stability_quick paper_week1_csv paper_week1_bq paper_collect_week1 deploy_queue deploy_safe_view verify_queue export_sanitized_artifacts
+.PHONY: format lint test train_a train_b eval serve dev run run_quick robustness run_robust train_morl eval_morl run_morl_quick meta_select run_meta_quick join_diag policy_eval run_morl_policy_quick run_morl_policy_robust_quick meta_stability run_meta_stability_quick run_statistical_analysis paper_week1_csv paper_week1_bq paper_collect_week1 deploy_queue deploy_safe_view verify_queue export_sanitized_artifacts
 
 format:
 	@$(PY) -m ruff format .
@@ -213,6 +214,15 @@ run_meta_stability_quick:
 	  --cache-root $(CONTRACT_CACHE_ROOT) \
 	  --out-root $(OUT_ROOT) \
 	  --quick
+
+run_statistical_analysis:
+	@test -n "$(RUN_ID)" || (echo "RUN_ID is required, e.g. make run_statistical_analysis RUN_ID=20260210T063154Z" && exit 1)
+	PYTHONPATH=. $(PY) -m statistical_significance \
+	  --morl-results reports/runs/$(RUN_ID)/morl_selected_test.json \
+	  --classical-results reports/runs/$(RUN_ID)/classical_test.json \
+	  --output reports/runs/$(RUN_ID)/statistical_analysis.json \
+	  --alpha 0.05 \
+	  --n-bootstrap 1000
 
 paper_week1_csv:
 	bash scripts/paper_matrix.sh --csv --seeds $(PAPER_CSV_SEEDS) --index-out $(PAPER_INDEX_CSV)
