@@ -822,6 +822,21 @@ def main(
             if meta_stability_output_path
             else None,
         },
+        statistical_analysis={
+            "enabled": bool(statistical_analysis_path),
+            "analysis_path": os.path.relpath(statistical_analysis_path, run_root)
+            if statistical_analysis_path
+            else None,
+            "table_path": os.path.relpath(statistical_table_path, run_root)
+            if statistical_table_path
+            else None,
+            "morl_results_path": os.path.relpath(morl_selected_root_path, run_root)
+            if morl_selected_root_path
+            else None,
+            "classical_results_path": os.path.relpath(classical_test_path, run_root)
+            if classical_test_path
+            else None,
+        },
     )
     write_run_manifest(os.path.join(report_dir, "run_manifest.json"), manifest)
 
