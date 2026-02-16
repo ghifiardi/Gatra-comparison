@@ -185,6 +185,19 @@ Key files:
 - `../contract/objectives_meta.json`: objective definitions + normalization stats.
 - `../contract/objectives_norm.json`: persisted reference normalization statistics.
 
+Statistical comparison artifacts (MORL selected vs classical IF baseline):
+
+- `../../morl_selected_test.json`: selected MORL TEST payload with bootstrap `metric_samples`.
+- `../../classical_test.json`: baseline TEST payload with bootstrap `metric_samples`.
+- `../../statistical_analysis.json`: paired test summary (`p_value`, `p_adj`, CI, effect size, power).
+- `../../table1_statistical.tex`: paper-ready LaTeX table.
+
+Manual rerun command:
+
+```bash
+make run_statistical_analysis RUN_ID=<run_id>
+```
+
 ## Interpreting Pareto and Hypervolume
 
 Primary metrics in default config:
