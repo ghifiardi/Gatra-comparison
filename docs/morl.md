@@ -203,6 +203,8 @@ Paper packaging commands:
 ```bash
 make paper_pin_evidence RUN_ID=<run_id>
 make paper_tables RUN_ID=<run_id>
+make paper_results_paragraph RUN_ID=<run_id>
+make paper_k_sweep RUN_ID=<run_id>
 ```
 
 ## Interpreting Pareto and Hypervolume
