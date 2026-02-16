@@ -18,7 +18,6 @@ from sklearn.metrics import confusion_matrix
 
 from architecture_a_rl.networks import Actor
 from architecture_a_rl.morl.moppo import load_weight_grid_from_config, train_moppo_from_arrays
-from architecture_a_rl.morl.networks import PreferenceConditionedActor
 from architecture_a_rl.morl.meta_controller import select_weight
 from architecture_a_rl.train import train_ppo_from_arrays
 from architecture_b_iforest.model import IForestModel
@@ -29,7 +28,11 @@ from data.contract_export import export_frozen_contract_to_dir
 from data.join import build_join_map
 from evaluation.metrics import classification_metrics
 from evaluation.meta_selection_report import write_meta_selection_artifacts
-from evaluation.morl_report import evaluate_morl_weight_on_split, run_morl_weight_sweep
+from evaluation.morl_report import (
+    evaluate_morl_weight_on_split,
+    run_morl_weight_sweep,
+    score_morl_weight_on_split,
+)
 from evaluation.policy_eval import run_policy_eval
 from evaluation.meta_stability import run_stability_suite, write_stability_artifacts
 from evaluation.robustness import run_robustness_suite
@@ -197,44 +200,6 @@ def _metric_samples_to_json(
     for key, values in payload.items():
         out[str(key)] = [float(v) for v in values.tolist()]
     return out
-
-
-def _score_morl_weight_on_split(
-    contract_dir: str,
-    morl_model_dir: str,
-    morl_cfg_path: str,
-    split: str,
-    w: list[float],
-) -> tuple[NDArray[np.int_], NDArray[np.float64]]:
-    morl_root = load_yaml(morl_cfg_path)
-    morl_cfg = cast(dict[str, Any], morl_root.get("morl", {}))
-    k = int(morl_cfg.get("k_objectives", 3))
-    train_cfg = cast(dict[str, Any], morl_cfg.get("training", {}))
-    hidden = [int(v) for v in cast(list[int], train_cfg.get("hidden", [256, 128, 64]))]
-
-    actor = PreferenceConditionedActor(
-        state_dim=128, k_objectives=k, hidden=hidden, action_dim=2
-    )
-    actor_path = os.path.join(morl_model_dir, "actor.pt")
-    actor.load_state_dict(torch.load(actor_path, map_location="cpu"))
-    actor.eval()
-
-    _, x128_split, y_split = _load_contract_split(contract_dir, split)
-    w_arr = np.asarray(w, dtype=np.float32)
-    w_sum = float(np.sum(w_arr))
-    if w_sum <= 0.0:
-        raise ValueError("Selected MORL weight vector must have positive sum")
-    w_arr = w_arr / w_sum
-
-    with torch.no_grad():
-        states = torch.tensor(x128_split, dtype=torch.float32)
-        w_rep = np.repeat(w_arr[None, :], x128_split.shape[0], axis=0).astype(np.float32)
-        w_t = torch.tensor(w_rep, dtype=torch.float32)
-        xw = torch.cat([states, w_t], dim=1)
-        probs = actor(xw).cpu().numpy()
-        y_score = probs[:, 1].astype(np.float64)
-
-    return y_split, y_score
 
 
 def _load_iforest_artifacts(model_dir: str) -> tuple[IForestModel, Preprocessor, float]:
@@ -588,7 +553,7 @@ def main(
     ):
         x7_test_stat, _, y_test_stat = _load_contract_test(contract_dir)
         if_scores_test_stat, if_threshold_stat = _score_iforest(iforest_dir, x7_test_stat)
-        y_morl_stat, morl_scores_test_stat = _score_morl_weight_on_split(
+        y_morl_stat, morl_scores_test_stat = score_morl_weight_on_split(
             contract_dir=contract_dir,
             morl_model_dir=morl_dir,
             morl_cfg_path=config_paths["morl"],
