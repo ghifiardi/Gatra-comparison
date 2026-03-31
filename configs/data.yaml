@@ -1,9 +1,44 @@
 dataset:
-  source: "toy"  # "toy" | "csv" | "parquet" | "bigquery" (stub)
+  source: "bigquery"  # bigquery | parquet | csv | toy
+  bq_project: "chronicle-dev-2be9"
+  bq_dataset: "gatra_database"
+  bq_events_table: "activity_logs"
+  bq_labels_table: "ada_feedback"
+  limit: null
+
+  # parquet/csv fallback
   path: "./_local_data/events.parquet"
   label_path: "./_local_data/labels.parquet"
 
+labels:
+  source: "bigquery"
+  bq_project: "chronicle-dev-2be9"
+  bq_dataset: "gatra_database"
+  bq_labels_table: "ada_feedback"
+  path: "./_local_data/labels.parquet"
+
+mapping:
+  events:
+    event_id: "event_id"
+    ts: "ts"
+    src_ip: "src_ip"
+    dst_ip: "dst_ip"
+    port: "port"
+    protocol: "protocol"
+    duration: "duration"
+    bytes_sent: "bytes_sent"
+    bytes_received: "bytes_received"
+    user_id: "user_id"
+    host_id: "host_id"
+  labels:
+    event_id: "event_id"
+    label: "label"
+    severity: "severity"
+    source: "source"
+    ts: "ts"
+
 splits:
+  mode: "time"
   train:
     start: "2025-01-01"
     end: "2025-08-31"
@@ -13,3 +48,19 @@ splits:
   test:
     start: "2025-11-01"
     end: "2025-12-31"
+
+features:
+  v7:
+    enabled: true
+    fields:
+      - duration
+      - bytes_sent
+      - bytes_received
+      - port
+      - protocol
+      - hour_of_day
+      - day_of_week
+  v128:
+    enabled: true
+    history_window_minutes: 60
+    dims: 128
