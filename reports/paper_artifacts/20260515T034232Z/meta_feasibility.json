@@ -1,0 +1,71 @@
+{
+  "constraints_mode": "hard",
+  "feasible_count_initial": 0,
+  "fallback_used": true,
+  "fallback_mode": "soft_constraints",
+  "relaxation_trace": [
+    {
+      "step": 0,
+      "constraints": {
+        "mode": "hard",
+        "alerts_per_1k_max": 50.0,
+        "recall_min": 0.55,
+        "precision_min": null,
+        "pr_auc_min": null
+      },
+      "feasible_count": 0
+    },
+    {
+      "step": 1,
+      "constraints": {
+        "mode": "hard",
+        "alerts_per_1k_max": 80.0,
+        "recall_min": 0.5,
+        "precision_min": null,
+        "pr_auc_min": null
+      },
+      "feasible_count": 0
+    },
+    {
+      "step": 2,
+      "constraints": {
+        "mode": "hard",
+        "alerts_per_1k_max": 120.0,
+        "recall_min": 0.4,
+        "precision_min": null,
+        "pr_auc_min": null
+      },
+      "feasible_count": 0
+    }
+  ],
+  "final_constraints_used": {
+    "mode": "hard",
+    "alerts_per_1k_max": 30.0,
+    "recall_min": 0.6,
+    "precision_min": null,
+    "pr_auc_min": null
+  },
+  "violated_constraints_summary": {
+    "alerts_per_1k_max": {
+      "violated": false,
+      "raw": 0.0,
+      "normalized": 0.0
+    },
+    "recall_min": {
+      "violated": true,
+      "raw": 0.6,
+      "normalized": 1.0
+    }
+  },
+  "relaxation_step_used": null,
+  "selection_rationale": "no_feasible_candidates_after_relaxation_soft_fallback",
+  "penalty_breakdown": {
+    "recall": 5.0,
+    "alerts": 0.0,
+    "precision": 0.0,
+    "pr_auc": 0.0,
+    "base_utility": 0.549094233561213,
+    "total_penalty": 5.0,
+    "final_score": -4.450905766438787
+  }
+}
