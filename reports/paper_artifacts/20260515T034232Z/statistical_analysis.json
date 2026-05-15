@@ -1,0 +1,74 @@
+{
+  "metadata": {
+    "alpha": 0.05,
+    "n_bootstrap": 1000,
+    "correction_method": "bh",
+    "recommended_test": "wilcoxon"
+  },
+  "metrics": {
+    "Alert_rate_per_1k": {
+      "n": 1000,
+      "test_name": "wilcoxon",
+      "p_value": 3.300770150860211e-165,
+      "p_adj": 3.3258404048819146e-165,
+      "mean_morl": 0.0,
+      "mean_classical": 20.566113551108675,
+      "mean_diff": -20.566113551108675,
+      "ci_95": [
+        -20.598732462053956,
+        -20.531511233630138
+      ],
+      "effect_size": -38.933066150117625,
+      "power": 1.0,
+      "significant": true
+    },
+    "F1_score": {
+      "n": 1000,
+      "test_name": "wilcoxon",
+      "p_value": 3.3258404048819146e-165,
+      "p_adj": 3.3258404048819146e-165,
+      "mean_morl": 0.0,
+      "mean_classical": 0.033236445339244226,
+      "mean_diff": -0.033236445339244226,
+      "ci_95": [
+        -0.03331811178103154,
+        -0.03315340200602973
+      ],
+      "effect_size": -25.090535114393415,
+      "power": 1.0,
+      "significant": true
+    },
+    "FPR": {
+      "n": 1000,
+      "test_name": "wilcoxon",
+      "p_value": 3.325838533482824e-165,
+      "p_adj": 3.3258404048819146e-165,
+      "mean_morl": 0.0,
+      "mean_classical": 0.02378141276790526,
+      "mean_diff": -0.02378141276790526,
+      "ci_95": [
+        -0.02382877738123154,
+        -0.023735161743351947
+      ],
+      "effect_size": -31.430251406053962,
+      "power": 1.0,
+      "significant": true
+    },
+    "TTT_minutes": {
+      "n": 1000,
+      "test_name": "wilcoxon",
+      "p_value": 3.133093687816085e-182,
+      "p_adj": 1.253237475126434e-181,
+      "mean_morl": 0.0,
+      "mean_classical": 21597.083333333336,
+      "mean_diff": -21597.083333333336,
+      "ci_95": [
+        -21597.083333333336,
+        -21597.083333333336
+      ],
+      "effect_size": -1.119346442744275e+16,
+      "power": 1.0,
+      "significant": true
+    }
+  }
+}

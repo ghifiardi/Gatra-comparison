@@ -1,0 +1,10 @@
+{
+  "run_id": "20260515T034232Z",
+  "source_run_dir": "reports/runs/20260515T034232Z",
+  "files": [
+    "statistical_analysis.json",
+    "table1_statistical.tex",
+    "morl_selected_test.json",
+    "classical_test.json"
+  ]
+}
