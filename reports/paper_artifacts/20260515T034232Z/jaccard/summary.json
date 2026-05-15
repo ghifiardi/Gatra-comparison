@@ -1,0 +1,13 @@
+{
+  "k": 10487,
+  "alpha": 0.05,
+  "models": [
+    "PPO",
+    "IF"
+  ],
+  "significant_pairs": [
+    "PPO-IF"
+  ],
+  "primary_metric": "cluster_jaccard",
+  "supplementary_metric": "event_jaccard"
+}
